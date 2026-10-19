@@ -19,6 +19,7 @@ import fr.demo.caisse.ui.DialogueImpression
 import fr.demo.caisse.ui.EcranPaiement
 import fr.demo.caisse.ui.MenuLateral
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxSize
 import fr.demo.caisse.ui.DialogueRemise
 import fr.demo.caisse.ui.JournalScreen
 import fr.demo.caisse.ui.LoginScreen
@@ -80,6 +81,13 @@ class UiSnapshotTest {
         capturer("01-login-pin-compact", largeur = 1024, hauteur = 768) { LoginScreen(e, e.db.caissiers().first { it.estResponsable }) }
 
         val s = caisseAvecTicket()
+        capturer("13-info") { fr.demo.caisse.ui.CarteInfoCaisse(s) {} }
+        capturer("13-info-bouton") {
+            Box {
+                LoginScreen(etat())
+                fr.demo.caisse.ui.CalqueInfo(s, androidx.compose.ui.Modifier.fillMaxSize())
+            }
+        }
         capturer("12-veille") { fr.demo.caisse.ui.VeilleScreen(s) }
         capturer("12-veille-code") { fr.demo.caisse.ui.VeilleScreen(s, demarrerParLeCode = true) }
         s.selectionner(1)

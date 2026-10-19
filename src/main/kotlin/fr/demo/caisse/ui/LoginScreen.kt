@@ -150,11 +150,6 @@ private fun PanneauMarque(state: AppState, compact: Boolean, modifier: Modifier)
                     "Connectez-vous pour accéder à votre espace de vente et à toutes les fonctionnalités.",
                     fontSize = if (compact) 17.sp else 21.sp, color = Marine.copy(alpha = 0.85f), modifier = Modifier.padding(top = 18.dp).widthIn(max = 540.dp),
                 )
-                Row(Modifier.padding(top = if (compact) 22.dp else 34.dp), horizontalArrangement = Arrangement.spacedBy(if (compact) 22.dp else 38.dp)) {
-                    TuileFonction(Pictogramme.ECLAIR, "Vente rapide", "Simple et efficace", compact)
-                    TuileFonction(Pictogramme.BARRES, "Stock en temps réel", "Produits et ventes", compact)
-                    TuileFonction(Pictogramme.BOUCLIER, "Sécurisé", "Données protégées", compact)
-                }
             }
             Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
                 Text(DatesFr.heure(maintenant), fontSize = if (compact) 54.sp else 68.sp, fontWeight = FontWeight.SemiBold, color = Marine)
@@ -171,17 +166,6 @@ private fun PanneauMarque(state: AppState, compact: Boolean, modifier: Modifier)
                 }
             }
         }
-    }
-}
-
-@Composable
-private fun TuileFonction(type: Pictogramme, titre: String, detail: String, compact: Boolean) {
-    Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
-        Box(Modifier.size(if (compact) 54.dp else 66.dp).clip(RoundedCornerShape(18.dp)).background(Menthe), contentAlignment = Alignment.Center) {
-            IconeFonction(type, if (compact) 26.dp else 32.dp)
-        }
-        Text(titre, fontSize = if (compact) 14.sp else 17.sp, fontWeight = FontWeight.Bold, color = Marine, modifier = Modifier.padding(top = 8.dp))
-        Text(detail, fontSize = if (compact) 12.sp else 14.sp, color = Gris)
     }
 }
 

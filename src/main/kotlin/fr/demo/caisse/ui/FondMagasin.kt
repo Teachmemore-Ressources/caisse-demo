@@ -201,35 +201,3 @@ fun IconePosition(taille: Dp = 22.dp, couleur: Color = Marine, modifier: Modifie
         drawCircle(couleur, radius = s * 0.10f, center = Offset(s * 0.5f, s * 0.40f), style = Stroke(s * 0.08f))
     }
 }
-
-enum class Pictogramme { ECLAIR, BARRES, BOUCLIER }
-
-/** Pictogramme d'une tuile de fonctionnalité (éclair, histogramme, bouclier). */
-@Composable
-fun IconeFonction(type: Pictogramme, taille: Dp = 28.dp, couleur: Color = Vert, modifier: Modifier = Modifier) {
-    Canvas(modifier.size(taille)) {
-        val s = size.width
-        when (type) {
-            Pictogramme.ECLAIR -> {
-                val p = Path().apply {
-                    moveTo(s * 0.58f, s * 0.04f); lineTo(s * 0.20f, s * 0.56f); lineTo(s * 0.46f, s * 0.56f)
-                    lineTo(s * 0.38f, s * 0.96f); lineTo(s * 0.80f, s * 0.40f); lineTo(s * 0.54f, s * 0.40f); close()
-                }
-                drawPath(p, couleur)
-            }
-            Pictogramme.BARRES -> {
-                listOf(0.12f to 0.55f, 0.40f to 0.20f, 0.68f to 0.38f).forEach { (x, y) ->
-                    drawRoundRect(couleur, topLeft = Offset(s * x, s * y), size = Size(s * 0.20f, s * (0.92f - y)), cornerRadius = CornerRadius(s * 0.06f))
-                }
-            }
-            Pictogramme.BOUCLIER -> {
-                val p = Path().apply {
-                    moveTo(s * 0.5f, s * 0.06f); lineTo(s * 0.88f, s * 0.20f); lineTo(s * 0.88f, s * 0.52f)
-                    cubicTo(s * 0.88f, s * 0.76f, s * 0.68f, s * 0.90f, s * 0.5f, s * 0.96f)
-                    cubicTo(s * 0.32f, s * 0.90f, s * 0.12f, s * 0.76f, s * 0.12f, s * 0.52f); lineTo(s * 0.12f, s * 0.20f); close()
-                }
-                drawPath(p, couleur, style = Stroke(s * 0.085f, join = StrokeJoin.Round))
-            }
-        }
-    }
-}

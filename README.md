@@ -1,4 +1,4 @@
-# Caisse Démo 1.3.2 — maquette de caisse enregistreuse tactile
+# Caisse Démo 1.3.3 — maquette de caisse enregistreuse tactile
 
 Application de caisse (Kotlin + Compose Desktop) pour démonstration : connexion par caissier, caisse tactile
 complète, paiements multiples, comptage de fonds, journal, synchronisation avec un SaaS et **vente hors ligne**.
@@ -6,6 +6,14 @@ Application indépendante, conçue pour tourner en mode kiosque avec le paquet `
 
 > Maquette de démonstration : ne gère ni les exigences fiscales légales (certification, archivage),
 > ni les paiements sur un vrai terminal (le TPE est simulé).
+
+## Nouveautés de la 1.3.3
+
+- **Bouton « i » moderne**, dessiné dans l'application : rond, translucide, avec un anneau qui se remplit pendant l'appui maintenu (2 s) ; un appui
+  bref n'ouvre rien et affiche « Maintenez 2 s ». Il ouvre une **carte d'informations** (poste : nom, adresse IP, ID TeamViewer, versions ;
+  application : magasin, caisse, réseau, dernière synchronisation, tickets en attente). Réglages inchangés : `INFO_BUTTON_ENABLED`,
+  `INFO_BUTTON_POS`, `INFO_HOLD_SECONDS` dans `/etc/default/storepos-kiosk`. Le paquet storepos-kiosk 1.3.1 retire l'ancien bouton gris.
+- Écran de connexion : les trois tuiles (Vente rapide, Stock en temps réel, Sécurisé) sont retirées.
 
 ## Nouveautés de la 1.3.2
 

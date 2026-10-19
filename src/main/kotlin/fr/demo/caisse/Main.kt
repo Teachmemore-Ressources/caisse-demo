@@ -20,6 +20,7 @@ import androidx.compose.ui.input.key.type
 import androidx.compose.ui.input.key.utf16CodePoint
 import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.pointerInput
+import fr.demo.caisse.ui.CalqueInfo
 import fr.demo.caisse.ui.VeilleScreen
 import kotlinx.coroutines.delay
 import androidx.compose.ui.unit.DpSize
@@ -96,6 +97,7 @@ fun AppRoot(state: AppState, onQuitter: () -> Unit) {
             }
             state.autorisation?.let { d -> AutorisationResponsable(state, d.libelle, onValide = { state.fermerAutorisation(); d.action() }, onAnnuler = { state.fermerAutorisation() }) }
             Box(Modifier.align(Alignment.TopCenter)) { BandeauMessage(state) }
+            if (!state.veille) CalqueInfo(state, Modifier.fillMaxSize())   // bouton « i » (appui maintenu : informations pour le technicien)
             if (state.veille) VeilleScreen(state)
         }
       }
