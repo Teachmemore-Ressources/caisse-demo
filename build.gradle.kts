@@ -8,7 +8,7 @@ plugins {
 }
 
 group = "fr.demo.caisse"
-version = "1.3.1"
+version = "1.3.2"
 
 dependencies {
     implementation(compose.desktop.currentOs)
@@ -35,7 +35,7 @@ compose.desktop {
         nativeDistributions {
             targetFormats(TargetFormat.Deb)
             packageName = "caisse-demo"
-            packageVersion = "1.3.1"
+            packageVersion = "1.3.2"
             description = "Caisse enregistreuse de démonstration"
             // Modules Java nécessaires au runtime embarqué (jlink)
             modules("java.sql", "java.naming", "java.net.http", "jdk.crypto.ec", "jdk.unsupported")

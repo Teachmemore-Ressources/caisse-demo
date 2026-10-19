@@ -1,4 +1,4 @@
-# Caisse Démo 1.3.1 — maquette de caisse enregistreuse tactile
+# Caisse Démo 1.3.2 — maquette de caisse enregistreuse tactile
 
 Application de caisse (Kotlin + Compose Desktop) pour démonstration : connexion par caissier, caisse tactile
 complète, paiements multiples, comptage de fonds, journal, synchronisation avec un SaaS et **vente hors ligne**.
@@ -6,6 +6,17 @@ Application indépendante, conçue pour tourner en mode kiosque avec le paquet `
 
 > Maquette de démonstration : ne gère ni les exigences fiscales légales (certification, archivage),
 > ni les paiements sur un vrai terminal (le TPE est simulé).
+
+## Nouveautés de la 1.3.2
+
+- **Nouvel écran de connexion clair**, d'après la maquette du magasin : à gauche la marque (logo, slogan), « Bon retour sur votre caisse », trois tuiles
+  (Vente rapide, Stock en temps réel, Sécurisé), l'heure, la date, le magasin et le numéro de caisse, sur une photo de magasin ;
+  à droite une **carte blanche** avec le profil (nom de code) centré et le pavé du code d'accès aux touches arrondies.
+  La marque se règle dans la base (`marque_nom`, `marque_slogan`). La photo se remplace sans reconstruire : `/etc/caisse-demo/accueil.jpg`
+  (ou la variable `CAISSE_FOND_ACCUEIL`) ; sans photo, un décor dessiné en code est utilisé.
+- **Dates en français garanties** : elles s'affichaient en anglais (« Mon 19 Oct ») car le runtime embarqué n'a pas les données de langue.
+- L'état du réseau devient « Caisse opérationnelle » (local ou en ligne) ou « Hors ligne ».
+- Déverrouillage après la veille : même carte blanche que la connexion.
 
 ## Nouveautés de la 1.3.1
 

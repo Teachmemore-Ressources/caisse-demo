@@ -5,7 +5,7 @@ import java.net.InetAddress
 import java.net.NetworkInterface
 
 object SystemInfo {
-    const val VERSION = "1.3.1"
+    const val VERSION = "1.3.2"
 
     fun hostname(): String = runCatching { InetAddress.getLocalHost().hostName }.getOrDefault("inconnu")
 

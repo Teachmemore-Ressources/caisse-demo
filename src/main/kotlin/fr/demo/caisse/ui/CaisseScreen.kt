@@ -162,7 +162,7 @@ private fun BarreCaisse(state: AppState, onMenu: () -> Unit) {
             val (couleur, libelle) = when (etat) {
                 EtatReseau.EN_LIGNE -> Color(0xFF4ADE80) to "En ligne"
                 EtatReseau.HORS_LIGNE -> Color(0xFFFBBF24) to "Hors ligne"
-                EtatReseau.NON_CONFIGURE -> Ext.surBarreDiscret to "Mode autonome"
+                EtatReseau.NON_CONFIGURE -> Ext.surBarreDiscret to "Mode local"
             }
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                 Box(Modifier.size(10.dp).background(couleur, CircleShape))

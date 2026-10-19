@@ -7,6 +7,8 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.widthIn
@@ -20,6 +22,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -69,12 +72,8 @@ fun VeilleScreen(state: AppState, demarrerParLeCode: Boolean = false) {
 private fun androidx.compose.foundation.layout.BoxScope.HorlogeContenu(maintenant: LocalDateTime) {
     val (dx, dy) = DEPLACEMENTS[maintenant.minute % DEPLACEMENTS.size]
     Column(Modifier.align(Alignment.Center).offset(dx.dp, dy.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(6.dp)) {
-        Text(maintenant.format(DateTimeFormatter.ofPattern("HH:mm")), fontSize = 120.sp, fontWeight = FontWeight.Light, color = PaletteSombre.Texte.copy(alpha = 0.85f))
-        Text(
-            maintenant.dayOfWeek.getDisplayName(TextStyle.FULL, Locale.FRENCH).replaceFirstChar { it.uppercase() } + " " +
-                maintenant.format(DateTimeFormatter.ofPattern("d MMMM yyyy", Locale.FRENCH)),
-            fontSize = 22.sp, color = PaletteSombre.TexteDiscret,
-        )
+        Text(DatesFr.heure(maintenant), fontSize = 120.sp, fontWeight = FontWeight.Light, color = PaletteSombre.Texte.copy(alpha = 0.85f))
+        Text(DatesFr.jourComplet(maintenant), fontSize = 22.sp, color = PaletteSombre.TexteDiscret)
         Text("Touchez l'écran pour reprendre", fontSize = 16.sp, color = PaletteSombre.TexteDiscret.copy(alpha = 0.7f), modifier = Modifier.padding(top = 36.dp))
     }
 }
@@ -90,14 +89,26 @@ private fun androidx.compose.foundation.layout.BoxScope.Horloge() {
 private fun androidx.compose.foundation.layout.BoxScope.Deverrouillage(state: AppState, caissier: fr.demo.caisse.model.Caissier, onRetour: () -> Unit) {
     // Sans activité pendant 30 s, retour à l'horloge
     LaunchedEffect(Unit) { delay(30_000); onRetour() }
+    // Le même pavé que la connexion, sur sa carte blanche, posé sur le fond sombre de la veille
     Box(Modifier.fillMaxSize().background(Brush.verticalGradient(listOf(PaletteSombre.FondVeille, PaletteSombre.FondDroite))), contentAlignment = Alignment.Center) {
-        Column(Modifier.widthIn(max = 470.dp).padding(28.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
+        Column(Modifier.widthIn(max = 460.dp).fillMaxHeight(0.94f).padding(vertical = 16.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(10.dp)) {
             Text("Caisse verrouillée", fontSize = 15.sp, color = PaletteSombre.TexteDiscret)
-            SaisiePin(state, caissier, compact = false, onRetour = onRetour, onSucces = { state.reveiller() })
+            CarteBlanche(Modifier.fillMaxWidth().weight(1f)) {
+                // tailles réduites : la carte du déverrouillage est plus basse que celle de la connexion (sinon la dernière rangée est coupée)
+                SaisiePin(state, caissier, compact = true, onRetour = onRetour, onSucces = { state.reveiller() })
+            }
             Text(
                 "Changer de caissier", fontSize = 15.sp, color = PaletteSombre.TexteDiscret,
-                modifier = Modifier.align(Alignment.CenterHorizontally).clickable { state.verrouiller(); state.reveiller() }.padding(10.dp),
+                modifier = Modifier.clickable { state.verrouiller(); state.reveiller() }.padding(10.dp),
             )
         }
     }
+}
+
+/** Couleurs de l'écran de veille (sombre, pour ne pas éclairer le magasin). */
+internal object PaletteSombre {
+    val FondVeille = Color(0xFF03090B)
+    val FondDroite = Color(0xFF0A1F25)
+    val Texte = Color(0xFFF1F7F6)
+    val TexteDiscret = Color(0xFF8DB4AE)
 }

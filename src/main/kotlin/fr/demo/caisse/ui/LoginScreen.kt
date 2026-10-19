@@ -14,9 +14,11 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -33,11 +35,16 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
@@ -46,38 +53,31 @@ import fr.demo.caisse.model.Caissier
 import fr.demo.caisse.net.EtatReseau
 import kotlinx.coroutines.delay
 import java.time.LocalDateTime
-import java.time.format.DateTimeFormatter
-import java.time.format.TextStyle
-import java.util.Locale
 import kotlin.math.roundToInt
 
 private const val LONGUEUR_PIN = 4
 
-// Écran de connexion d'un terminal de caisse : toujours sombre (peu éblouissant en magasin), indépendant du thème de l'application.
-/** Palette sombre partagée par la connexion et la veille. */
-internal object PaletteSombre {
-    val FondPanneau = listOf(Color(0xFF0F5F59), Color(0xFF0B3A40), Color(0xFF071A1F))
-    val FondDroite = Color(0xFF0A1F25)
-    val FondVeille = Color(0xFF03090B)
-    val Accent = Color(0xFF2DD4BF)
-    val Ambre = Color(0xFFF59E0B)
-    val Texte = Color(0xFFF1F7F6)
-    val TexteDiscret = Color(0xFF8DB4AE)
-    val Carte = Color(0x12FFFFFF)
-    val Trait = Color(0x22FFFFFF)
-    val Danger = Color(0xFFF87171)
-    val Profil = Color(0xFFBFD9D5)
+/** Couleurs de l'écran de connexion : clair, vert et bleu marine, comme la maquette du magasin. */
+internal object CouleursLogin {
+    val Vert = Color(0xFF0A9A62)
+    val VertFonce = Color(0xFF087F50)
+    val Menthe = Color(0xFFE3F6EC)
+    val Marine = Color(0xFF0B1B34)
+    val Gris = Color(0xFF5C6B7F)
+    val FondDroite = Color(0xFFF3F5F8)
+    val Touche = Color(0xFFF0F3F6)
+    val Trait = Color(0xFFC9D1DA)
+    val Danger = Color(0xFFD64545)
+    val Ambre = Color(0xFFD98200)
+    val AmbreFond = Color(0xFFFFF0D5)
 }
-private val FondPanneau = PaletteSombre.FondPanneau
-private val FondDroite = PaletteSombre.FondDroite
-private val Accent = PaletteSombre.Accent
-private val Ambre = PaletteSombre.Ambre
-private val Texte = PaletteSombre.Texte
-private val TexteDiscret = PaletteSombre.TexteDiscret
-private val Carte = PaletteSombre.Carte
-private val Trait = PaletteSombre.Trait
-private val Danger = PaletteSombre.Danger
-private val Profil = PaletteSombre.Profil
+private val Vert = CouleursLogin.Vert
+private val Menthe = CouleursLogin.Menthe
+private val Marine = CouleursLogin.Marine
+private val Gris = CouleursLogin.Gris
+private val Touche = CouleursLogin.Touche
+private val Danger = CouleursLogin.Danger
+private val Ambre = CouleursLogin.Ambre
 
 @Composable
 fun LoginScreen(state: AppState, caissierInitial: Caissier? = null) {
@@ -85,16 +85,26 @@ fun LoginScreen(state: AppState, caissierInitial: Caissier? = null) {
     val caissiers = remember(state.produits) { state.db.caissiers() }
 
     Adaptatif { compact ->
-        Row(Modifier.fillMaxSize().background(FondDroite)) {
-            PanneauMarque(state, compact, Modifier.weight(if (compact) 0.85f else 1f).fillMaxHeight())
-            Box(Modifier.weight(1f).fillMaxHeight(), contentAlignment = Alignment.Center) {
-                Column(Modifier.widthIn(max = 470.dp).padding(horizontal = 28.dp, vertical = 20.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
+        Row(Modifier.fillMaxSize().background(CouleursLogin.FondDroite)) {
+            PanneauMarque(state, compact, Modifier.weight(if (compact) 1.55f else 1.85f).fillMaxHeight())
+            Box(Modifier.weight(1f).fillMaxHeight().padding(if (compact) 14.dp else 26.dp), contentAlignment = Alignment.Center) {
+                CarteBlanche(Modifier.fillMaxWidth().widthIn(max = 500.dp).fillMaxHeight()) {
                     val c = choisi
-                    if (c == null) ChoixCaissier(caissiers) { choisi = it } else SaisiePin(state, c, compact, onRetour = { choisi = null })
+                    if (c == null) ChoixCaissier(caissiers, compact) { choisi = it } else SaisiePin(state, c, compact, onRetour = { choisi = null })
                 }
             }
         }
     }
+}
+
+/** Carte blanche aux coins arrondis, avec une ombre légère : contient le choix du profil et le pavé du code. */
+@Composable
+internal fun CarteBlanche(modifier: Modifier = Modifier, contenu: @Composable () -> Unit) {
+    Box(
+        modifier.shadow(10.dp, RoundedCornerShape(30.dp), ambientColor = Color(0x22000000), spotColor = Color(0x22000000))
+            .clip(RoundedCornerShape(30.dp)).background(Color.White).padding(horizontal = 26.dp, vertical = 24.dp),
+        contentAlignment = Alignment.Center,
+    ) { contenu() }
 }
 
 @Composable
@@ -102,72 +112,113 @@ private fun PanneauMarque(state: AppState, compact: Boolean, modifier: Modifier)
     val etat by state.sync.etat.collectAsState()
     var maintenant by remember { mutableStateOf(LocalDateTime.now()) }
     LaunchedEffect(Unit) { while (true) { maintenant = LocalDateTime.now(); delay(10_000) } }
+    // Marque du magasin (réglable dans la base : « marque_nom », « marque_slogan ») ; le dernier mot est mis en vert
+    val marque = remember { state.db.config("marque_nom").orEmpty().ifBlank { "Test Market" } }
+    val slogan = remember { state.db.config("marque_slogan").orEmpty().ifBlank { "TOUT POUR VOTRE QUOTIDIEN" } }
+    val mots = marque.trim().split(" ")
+    val caisse = state.db.config("tpv").orEmpty()
+    val magasin = state.sync.magasin
 
-    Box(modifier.background(Brush.linearGradient(FondPanneau))) {
-        Column(Modifier.padding(if (compact) 36.dp else 48.dp).fillMaxHeight(), verticalArrangement = Arrangement.SpaceBetween) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Box(Modifier.size(52.dp).clip(RoundedCornerShape(14.dp)).background(Brush.linearGradient(listOf(Accent, Color(0xFF0F766E)))), contentAlignment = Alignment.Center) {
-                    Text("C", fontSize = 30.sp, fontWeight = FontWeight.Black, color = Color(0xFF042F2E))
+    Box(modifier.background(Color.White)) {
+        FondMagasin(Modifier.fillMaxSize())
+        // voile blanc : opaque à gauche (texte lisible), transparent à droite (le décor apparaît), comme la maquette
+        Box(
+            Modifier.fillMaxSize().background(
+                Brush.horizontalGradient(0f to Color.White, 0.40f to Color.White.copy(alpha = 0.97f), 0.70f to Color.White.copy(alpha = 0.40f), 1f to Color.Transparent),
+            ),
+        )
+        Column(Modifier.padding(horizontal = if (compact) 32.dp else 52.dp, vertical = if (compact) 28.dp else 40.dp).fillMaxHeight(), verticalArrangement = Arrangement.SpaceBetween) {
+            Row(verticalAlignment = Alignment.Top) {
+                LogoPanier(if (compact) 52.dp else 62.dp)
+                Column(Modifier.padding(start = 16.dp)) {
+                    Text(
+                        buildAnnotatedString {
+                            withStyle(SpanStyle(color = Marine)) { append(if (mots.size > 1) mots.dropLast(1).joinToString(" ") + " " else mots.first()) }
+                            if (mots.size > 1) withStyle(SpanStyle(color = Vert)) { append(mots.last()) }
+                        },
+                        fontSize = if (compact) 34.sp else 44.sp, fontWeight = FontWeight.Bold,
+                    )
+                    Text(slogan, fontSize = if (compact) 10.sp else 12.sp, letterSpacing = 3.sp, fontWeight = FontWeight.Medium, color = Marine.copy(alpha = 0.8f), modifier = Modifier.padding(start = 3.dp))
                 }
-                Text("Caisse Démo", fontSize = 26.sp, fontWeight = FontWeight.Bold, color = Texte, modifier = Modifier.padding(start = 14.dp))
                 Spacer(Modifier.weight(1f))
                 PastilleReseau(etat)
             }
-            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                Text("Bon retour", fontSize = if (compact) 40.sp else 46.sp, fontWeight = FontWeight.SemiBold, color = Texte)
-                Text("Connectez-vous pour ouvrir votre caisse.", fontSize = 19.sp, color = Texte.copy(alpha = 0.78f))
-            }
             Column {
-                Text(maintenant.format(DateTimeFormatter.ofPattern("HH:mm")), fontSize = if (compact) 54.sp else 62.sp, fontWeight = FontWeight.Light, color = Texte)
+                Text("Bon retour", fontSize = if (compact) 50.sp else 66.sp, fontWeight = FontWeight.Bold, color = Marine, lineHeight = if (compact) 54.sp else 70.sp)
+                Text("sur votre caisse", fontSize = if (compact) 50.sp else 66.sp, fontWeight = FontWeight.Bold, color = Vert, lineHeight = if (compact) 54.sp else 70.sp)
                 Text(
-                    maintenant.dayOfWeek.getDisplayName(TextStyle.FULL, Locale.FRENCH).replaceFirstChar { it.uppercase() } + " " +
-                        maintenant.format(DateTimeFormatter.ofPattern("d MMMM yyyy", Locale.FRENCH)),
-                    fontSize = 18.sp, color = Texte.copy(alpha = 0.72f),
+                    "Connectez-vous pour accéder à votre espace de vente et à toutes les fonctionnalités.",
+                    fontSize = if (compact) 17.sp else 21.sp, color = Marine.copy(alpha = 0.85f), modifier = Modifier.padding(top = 18.dp).widthIn(max = 540.dp),
                 )
-                if (etat == EtatReseau.NON_CONFIGURE) {
-                    Text("Aucun serveur configuré : les ventes restent sur cette caisse.", fontSize = 14.sp, color = TexteDiscret, modifier = Modifier.padding(top = 14.dp))
-                } else if (state.sync.magasin.isNotBlank()) {
-                    Text(state.sync.magasin, fontSize = 14.sp, color = TexteDiscret, modifier = Modifier.padding(top = 14.dp))
+                Row(Modifier.padding(top = if (compact) 22.dp else 34.dp), horizontalArrangement = Arrangement.spacedBy(if (compact) 22.dp else 38.dp)) {
+                    TuileFonction(Pictogramme.ECLAIR, "Vente rapide", "Simple et efficace", compact)
+                    TuileFonction(Pictogramme.BARRES, "Stock en temps réel", "Produits et ventes", compact)
+                    TuileFonction(Pictogramme.BOUCLIER, "Sécurisé", "Données protégées", compact)
+                }
+            }
+            Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                Text(DatesFr.heure(maintenant), fontSize = if (compact) 54.sp else 68.sp, fontWeight = FontWeight.SemiBold, color = Marine)
+                Text(DatesFr.jourComplet(maintenant), fontSize = if (compact) 17.sp else 21.sp, color = Marine.copy(alpha = 0.85f))
+                if (magasin.isNotBlank()) {
+                    Row(Modifier.padding(top = 14.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                        IconePosition(22.dp, Marine)
+                        Text(magasin, fontSize = if (compact) 15.sp else 18.sp, color = Marine.copy(alpha = 0.9f))
+                        if (caisse.isNotBlank()) {
+                            Text("|", fontSize = 18.sp, color = Marine.copy(alpha = 0.5f))
+                            Text(caisse, fontSize = if (compact) 15.sp else 18.sp, color = Marine.copy(alpha = 0.9f))
+                        }
+                    }
                 }
             }
         }
     }
 }
 
-/** État de la liaison avec le serveur (SaaS). « Mode autonome » : aucun serveur n'est configuré, la caisse vend seule et ne transmet rien. */
 @Composable
-private fun PastilleReseau(etat: EtatReseau) {
-    val (couleur, libelle) = when (etat) {
-        EtatReseau.EN_LIGNE -> Color(0xFF4ADE80) to "En ligne"
-        EtatReseau.HORS_LIGNE -> Ambre to "Hors ligne"
-        EtatReseau.NON_CONFIGURE -> TexteDiscret to "Mode autonome"
-    }
-    Row(
-        Modifier.clip(RoundedCornerShape(50)).background(Color(0x1FFFFFFF)).padding(horizontal = 14.dp, vertical = 8.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Box(Modifier.size(9.dp).background(couleur, CircleShape))
-        Text(libelle, fontSize = 14.sp, fontWeight = FontWeight.Medium, color = Texte, modifier = Modifier.padding(start = 8.dp))
+private fun TuileFonction(type: Pictogramme, titre: String, detail: String, compact: Boolean) {
+    Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
+        Box(Modifier.size(if (compact) 54.dp else 66.dp).clip(RoundedCornerShape(18.dp)).background(Menthe), contentAlignment = Alignment.Center) {
+            IconeFonction(type, if (compact) 26.dp else 32.dp)
+        }
+        Text(titre, fontSize = if (compact) 14.sp else 17.sp, fontWeight = FontWeight.Bold, color = Marine, modifier = Modifier.padding(top = 8.dp))
+        Text(detail, fontSize = if (compact) 12.sp else 14.sp, color = Gris)
     }
 }
 
+/** État de la caisse en haut à droite. « Caisse opérationnelle » : elle vend, avec ou sans serveur ; « Hors ligne » : un serveur est configuré mais injoignable. */
 @Composable
-private fun ChoixCaissier(caissiers: List<Caissier>, onChoix: (Caissier) -> Unit) {
-    Text("Qui est à la caisse ?", fontSize = 28.sp, fontWeight = FontWeight.SemiBold, color = Texte)
-    Text("Sélectionnez votre profil.", fontSize = 17.sp, color = TexteDiscret)
-    LazyColumn(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-        items(caissiers, key = { it.id }) { c ->
-            Row(
-                Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(Carte).border(1.dp, Trait, RoundedCornerShape(16.dp))
-                    .clickable { onChoix(c) }.padding(14.dp),
-                verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(14.dp),
-            ) {
-                AvatarProfil(c.estResponsable, 54.dp)
-                Column(Modifier.weight(1f)) {
-                    Text(c.libelleConnexion, fontSize = 20.sp, fontWeight = FontWeight.SemiBold, color = Texte)
-                    Text(if (c.estResponsable) "Accès responsable" else "Accès caisse", fontSize = 14.sp, color = if (c.estResponsable) Ambre.copy(alpha = 0.9f) else TexteDiscret)
+private fun PastilleReseau(etat: EtatReseau) {
+    val (fond, point, couleur, libelle) = when (etat) {
+        EtatReseau.EN_LIGNE -> Quad(Menthe, Vert, CouleursLogin.VertFonce, "Caisse en ligne")
+        EtatReseau.NON_CONFIGURE -> Quad(Menthe, Vert, CouleursLogin.VertFonce, "Caisse opérationnelle")
+        EtatReseau.HORS_LIGNE -> Quad(CouleursLogin.AmbreFond, Ambre, Color(0xFF8A5300), "Hors ligne")
+    }
+    Row(Modifier.clip(RoundedCornerShape(50)).background(fond).padding(horizontal = 20.dp, vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
+        Box(Modifier.size(12.dp).background(point, CircleShape))
+        Text(libelle, fontSize = 17.sp, fontWeight = FontWeight.Medium, color = couleur, modifier = Modifier.padding(start = 10.dp))
+    }
+}
+
+private data class Quad(val a: Color, val b: Color, val c: Color, val d: String)
+
+@Composable
+private fun ChoixCaissier(caissiers: List<Caissier>, compact: Boolean, onChoix: (Caissier) -> Unit) {
+    Column(Modifier.fillMaxSize(), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
+        Text("Qui est à la caisse ?", fontSize = if (compact) 26.sp else 32.sp, fontWeight = FontWeight.Bold, color = Marine, textAlign = TextAlign.Center)
+        Text("Sélectionnez votre profil.", fontSize = 17.sp, color = Gris, modifier = Modifier.padding(top = 6.dp, bottom = 22.dp))
+        LazyColumn(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            items(caissiers, key = { it.id }) { c ->
+                Row(
+                    Modifier.fillMaxWidth().clip(RoundedCornerShape(22.dp)).background(Touche).clickable { onChoix(c) }.padding(14.dp),
+                    verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(14.dp),
+                ) {
+                    AvatarProfil(c.estResponsable, 58.dp)
+                    Column(Modifier.weight(1f)) {
+                        Text(c.libelleConnexion, fontSize = 21.sp, fontWeight = FontWeight.Bold, color = Marine)
+                        Text(if (c.estResponsable) "Accès responsable" else "Accès caisse", fontSize = 14.sp, color = if (c.estResponsable) Ambre else Gris)
+                    }
+                    Text("›", fontSize = 30.sp, color = Gris)
                 }
-                Text("›", fontSize = 30.sp, color = TexteDiscret)
             }
         }
     }
@@ -175,13 +226,14 @@ private fun ChoixCaissier(caissiers: List<Caissier>, onChoix: (Caissier) -> Unit
 
 /** Profil anonyme : une silhouette, pas d'initiales (l'identité réelle n'est pas affichée à la connexion). */
 @Composable
-private fun AvatarProfil(manager: Boolean, taille: Dp) {
-    val couleur = if (manager) Ambre else Profil
-    Box(Modifier.size(taille).clip(CircleShape).background(couleur.copy(alpha = 0.12f)).border(1.5.dp, couleur.copy(alpha = 0.45f), CircleShape)) {
+internal fun AvatarProfil(manager: Boolean, taille: Dp) {
+    val couleur = if (manager) Ambre else Vert
+    val fond = if (manager) CouleursLogin.AmbreFond else Menthe
+    Box(Modifier.size(taille).clip(CircleShape).background(fond)) {
         Canvas(Modifier.fillMaxSize()) {
             val w = size.width
-            drawCircle(couleur.copy(alpha = 0.85f), radius = w * 0.16f, center = Offset(w / 2f, w * 0.38f))
-            drawArc(couleur.copy(alpha = 0.85f), startAngle = 180f, sweepAngle = 180f, useCenter = true, topLeft = Offset(w * 0.2f, w * 0.60f), size = Size(w * 0.6f, w * 0.5f))
+            drawCircle(couleur, radius = w * 0.17f, center = Offset(w / 2f, w * 0.38f))
+            drawArc(couleur, startAngle = 180f, sweepAngle = 180f, useCenter = true, topLeft = Offset(w * 0.22f, w * 0.60f), size = Size(w * 0.56f, w * 0.44f))
         }
     }
 }
@@ -210,26 +262,25 @@ internal fun SaisiePin(state: AppState, caissier: Caissier, compact: Boolean, on
         }
     }
 
-    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(14.dp)) {
-        AvatarProfil(caissier.estResponsable, 58.dp)
-        Column {
-            Text(caissier.libelleConnexion, fontSize = 26.sp, fontWeight = FontWeight.SemiBold, color = Texte)
-            Text(if (erreur) "Code incorrect, réessayez" else "Saisissez votre code", fontSize = 16.sp, color = if (erreur) Danger else TexteDiscret, fontWeight = if (erreur) FontWeight.SemiBold else FontWeight.Normal)
+    Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(if (compact) 8.dp else 10.dp)) {
+        AvatarProfil(caissier.estResponsable, if (compact) 92.dp else 120.dp)
+        Text(caissier.libelleConnexion, fontSize = if (compact) 30.sp else 36.sp, fontWeight = FontWeight.Bold, color = Marine, modifier = Modifier.padding(top = 4.dp))
+        Text(
+            if (erreur) "Code incorrect, réessayez" else "Saisissez votre code d'accès", fontSize = 17.sp,
+            color = if (erreur) Danger else Gris, fontWeight = if (erreur) FontWeight.SemiBold else FontWeight.Normal, textAlign = TextAlign.Center,
+        )
+        Row(Modifier.offset { IntOffset(secousse.value.roundToInt(), 0) }.padding(vertical = if (compact) 6.dp else 12.dp), horizontalArrangement = Arrangement.spacedBy(if (compact) 20.dp else 26.dp)) {
+            repeat(LONGUEUR_PIN) { i ->
+                val rempli = i < pin.length
+                Box(
+                    Modifier.size(if (compact) 22.dp else 26.dp).clip(CircleShape)
+                        .background(if (rempli) (if (erreur) Danger else Vert) else Color.White)
+                        .border(2.dp, if (rempli) Color.Transparent else if (erreur) Danger else CouleursLogin.Trait, CircleShape),
+                )
+            }
         }
-    }
-    Row(Modifier.fillMaxWidth().offset { IntOffset(secousse.value.roundToInt(), 0) }.padding(vertical = 4.dp), horizontalArrangement = Arrangement.spacedBy(18.dp, Alignment.CenterHorizontally)) {
-        repeat(LONGUEUR_PIN) { i ->
-            val rempli = i < pin.length
-            Box(
-                Modifier.size(18.dp).clip(CircleShape)
-                    .background(if (rempli) (if (erreur) Danger else Accent) else Color.Transparent)
-                    .border(2.dp, if (rempli) Color.Transparent else if (erreur) Danger else Color.White.copy(alpha = 0.35f), CircleShape),
-            )
-        }
-    }
-    Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
         PavePin(
-            taille = if (compact) 72.dp else 80.dp,
+            hauteur = if (compact) 66.dp else 82.dp,
             onChiffre = { saisir(it) },
             onEffacer = { if (pin.isNotEmpty()) pin = pin.dropLast(1); erreur = false },
             onRetour = onRetour,
@@ -237,26 +288,22 @@ internal fun SaisiePin(state: AppState, caissier: Caissier, compact: Boolean, on
     }
 }
 
-/** Pavé de code PIN : touches rondes, chiffres fins, « Retour » = changer de caissier, « ⌫ » = effacer un chiffre. */
+/** Pavé de code : touches arrondies grises, chiffres en bleu marine. « Retour » = changer de caissier, « ⌫ » = effacer un chiffre. */
 @Composable
-private fun PavePin(taille: Dp, onChiffre: (String) -> Unit, onEffacer: () -> Unit, onRetour: () -> Unit) {
+private fun PavePin(hauteur: Dp, onChiffre: (String) -> Unit, onEffacer: () -> Unit, onRetour: () -> Unit) {
     val rangees = listOf(listOf("1", "2", "3"), listOf("4", "5", "6"), listOf("7", "8", "9"), listOf("Retour", "0", "⌫"))
-    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+    Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(12.dp)) {
         rangees.forEach { rangee ->
-            Row(horizontalArrangement = Arrangement.spacedBy(20.dp)) {
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                 rangee.forEach { k ->
-                    val action = k == "Retour" || k == "⌫"
                     Box(
-                        Modifier.size(taille).clip(CircleShape)
-                            .background(if (action) Color.Transparent else Carte)
-                            .border(1.dp, if (action) Color.Transparent else Trait, CircleShape)
+                        Modifier.weight(1f).height(hauteur).clip(RoundedCornerShape(hauteur / 2)).background(Touche)
                             .clickable { when (k) { "Retour" -> onRetour(); "⌫" -> onEffacer(); else -> onChiffre(k) } },
                         contentAlignment = Alignment.Center,
                     ) {
                         Text(
-                            k, fontSize = if (k == "Retour") 16.sp else if (action) 28.sp else 32.sp,
-                            fontWeight = if (k == "Retour") FontWeight.Medium else if (action) FontWeight.Normal else FontWeight.Light,
-                            color = if (action) TexteDiscret else Texte,
+                            k, fontSize = if (k == "Retour") 18.sp else if (k == "⌫") 28.sp else 34.sp,
+                            fontWeight = if (k == "Retour") FontWeight.SemiBold else FontWeight.Medium, color = Marine,
                         )
                     }
                 }
