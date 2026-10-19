@@ -1,0 +1,20 @@
+#!/bin/bash
+# Généré par Terraform : paramètres du serveur (aucun secret). La suite est files/bootstrap.sh.
+umask 022
+cat > /etc/passerelle.env <<'FIN_PARAMETRES'
+REGION='${region}'
+NOM='${nom}'
+CONFIG_BUCKET='${config_bucket}'
+BACKUP_BUCKET='${backup_bucket}'
+DATA_VOLUME_ID='${volume_id}'
+GRAFANA_MODE='${mode}'
+ACME_EMAIL='${acme_email}'
+METRICS_DOMAIN='${domaine_metrics}'
+LOGS_DOMAIN='${domaine_logs}'
+GRAFANA_DOMAIN='${domaine_grafana}'
+GRAFANA_ADMIN_USER='${grafana_user}'
+SSO_CLIENT_ID='${sso_client_id}'
+SSO_DOMAINES='${sso_domaines}'
+GLPI_ENABLED='${glpi_active}'
+GLPI_DOMAIN='${domaine_glpi}'
+FIN_PARAMETRES

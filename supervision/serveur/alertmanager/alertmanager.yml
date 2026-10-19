@@ -1,0 +1,54 @@
+# Alertmanager : regroupe les alertes de Prometheus et les envoie à l'équipe.
+# À adapter : remplacez le webhook par votre messagerie (e-mail, Teams, Slack, GLPI via webhook…).
+route:
+  receiver: equipe
+  group_by: [alertname, enseigne, magasin]
+  group_wait: 30s          # attend un peu pour regrouper les alertes d'un même magasin
+  group_interval: 5m
+  repeat_interval: 4h
+  routes:
+    # Battement de cœur : envoyé en continu au récepteur « battement » (par défaut inactif : voir plus bas).
+    - matchers: ['alertname="Watchdog"']
+      receiver: battement
+      group_wait: 0s
+      group_interval: 1m
+      repeat_interval: 1m
+    - matchers: ['severity="critical"']
+      receiver: equipe-critique
+      repeat_interval: 1h
+    - matchers: ['severity="info"']
+      receiver: equipe
+      repeat_interval: 24h
+
+# Une panne de réseau dans un magasin fait tomber plusieurs alertes d'un coup : on garde la plus grave.
+inhibit_rules:
+  # Panne globale probable : on ne noie pas l'équipe sous des dizaines d'alertes « caisse muette ».
+  - source_matchers: ['alertname="PanneGlobaleProbable"']
+    target_matchers: ['alertname="CaisseMuette"']
+  - source_matchers: ['alertname="CaisseMuette"']
+    target_matchers: ['severity=~"warning|critical"']
+    equal: [enseigne, magasin, poste]
+
+receivers:
+  # Battement de cœur : pour l'activer, remplacer ce récepteur vide par l'adresse de ping de votre service externe, par exemple
+  #   - name: battement
+  #     webhook_configs:
+  #       - url: https://hc-ping.com/VOTRE-IDENTIFIANT
+  #         send_resolved: false
+  - name: battement
+  - name: equipe
+    webhook_configs:
+      - url: http://webhook-demo:5001/alertes
+        send_resolved: true
+  - name: equipe-critique
+    webhook_configs:
+      - url: http://webhook-demo:5001/alertes-critiques
+        send_resolved: true
+  # Exemple e-mail (à décommenter et compléter) :
+  # - name: equipe
+  #   email_configs:
+  #     - to: supervision@exemple.fr
+  #       from: alertmanager@exemple.fr
+  #       smarthost: smtp.exemple.fr:587
+  #       auth_username: alertmanager@exemple.fr
+  #       auth_password_file: /etc/alertmanager/smtp_password

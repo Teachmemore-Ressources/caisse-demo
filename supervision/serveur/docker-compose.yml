@@ -1,0 +1,96 @@
+# Passerelle de supervision des caisses : Caddy (entrée HTTPS) + Prometheus + Loki + Alertmanager + Grafana.
+# Voir GUIDE-SERVEUR.md. Usage :  cp .env.example .env  (à compléter)  puis  docker compose up -d
+#
+# Les caisses ENVOIENT (remote_write / push) ; rien ne les contacte. Seuls les ports 80 et 443 sont publiés
+# (80 sert au certificat Let's Encrypt et à la redirection vers HTTPS).
+# Grafana : choisir UNE protection, en ajoutant un fichier de surcharge :
+#   docker compose -f docker-compose.yml -f docker-compose.sso.yml up -d      (public, connexion SSO + double authentification)
+#   docker compose -f docker-compose.yml -f docker-compose.prive.yml up -d    (jamais public : tunnel SSH ou VPN d'administration)
+name: supervision-caisses
+
+services:
+  caddy:
+    image: caddy:2.11.7
+    restart: unless-stopped
+    ports: ["80:80", "443:443"]
+    environment:
+      ACME_EMAIL: ${ACME_EMAIL:?définir ACME_EMAIL dans .env}
+      METRICS_DOMAIN: ${METRICS_DOMAIN:?définir METRICS_DOMAIN dans .env}
+      LOGS_DOMAIN: ${LOGS_DOMAIN:?définir LOGS_DOMAIN dans .env}
+      GRAFANA_DOMAIN: ${GRAFANA_DOMAIN:-grafana.invalide}
+    volumes:
+      # Le DOSSIER est monté (pas des fichiers isolés) : quand un script remplace enseignes.caddy ou que la synchronisation
+      # réécrit un fichier, le conteneur voit aussitôt la nouvelle version. Un montage de fichier unique garderait l'ancienne.
+      - ./caddy:/etc/caddy:ro
+      - caddy_data:/data              # certificats : à sauvegarder (limites d'émission de Let's Encrypt)
+      - caddy_config:/config
+    depends_on: [prometheus, loki]
+
+  prometheus:
+    image: prom/prometheus:v3.15.0
+    restart: unless-stopped
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --web.enable-remote-write-receiver     # reçoit les mesures poussées par les caisses
+      - --web.enable-admin-api                 # sauvegardes (instantané) : joignable seulement DANS le réseau Docker, jamais publié
+      - --storage.tsdb.path=/prometheus
+      - --storage.tsdb.retention.time=30d
+      - --storage.tsdb.retention.size=40GB     # garde-fou : jamais plus que ce volume, quoi qu'il arrive
+    volumes:
+      - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./prometheus/rules:/etc/prometheus/rules:ro
+      - prometheus_data:/prometheus
+    expose: ["9090"]
+
+  alertmanager:
+    image: prom/alertmanager:v0.34.1
+    restart: unless-stopped
+    command: [--config.file=/etc/alertmanager/alertmanager.yml, --storage.path=/alertmanager]
+    volumes:
+      - ./alertmanager/alertmanager.yml:/etc/alertmanager/alertmanager.yml:ro
+      - alertmanager_data:/alertmanager
+    expose: ["9093"]
+
+  loki:
+    image: grafana/loki:3.7.8
+    restart: unless-stopped
+    command: [-config.file=/etc/loki/loki.yml]
+    volumes:
+      - ./loki/loki.yml:/etc/loki/loki.yml:ro
+      - loki_data:/loki
+    expose: ["3100"]
+
+  grafana:
+    image: grafana/grafana:13.2.4
+    restart: unless-stopped
+    environment:
+      GF_SECURITY_ADMIN_USER: ${GRAFANA_ADMIN_USER:-admin}
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:?définir GRAFANA_ADMIN_PASSWORD dans .env}
+      GF_SERVER_ROOT_URL: https://${GRAFANA_DOMAIN:-localhost}
+      GF_ANALYTICS_REPORTING_ENABLED: "false"
+      GF_ANALYTICS_CHECK_FOR_UPDATES: "false"
+      GF_USERS_ALLOW_SIGN_UP: "false"
+      GF_AUTH_ANONYMOUS_ENABLED: "false"
+      GF_SECURITY_COOKIE_SECURE: "true"
+      GF_SECURITY_DISABLE_GRAVATAR: "true"
+    volumes:
+      - ./grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./grafana/dashboards:/var/lib/grafana/dashboards:ro
+      - grafana_data:/var/lib/grafana
+    expose: ["3000"]
+    depends_on: [prometheus, loki, alertmanager]
+
+  # Récepteur d'alertes de démonstration (écrit les alertes dans ses journaux). À remplacer par votre messagerie.
+  webhook-demo:
+    image: mendhak/http-https-echo:latest
+    restart: unless-stopped
+    environment: { HTTP_PORT: "5001", HTTPS_PORT: "5002" }
+    expose: ["5001"]
+
+volumes:
+  caddy_data:
+  caddy_config:
+  prometheus_data:
+  alertmanager_data:
+  loki_data:
+  grafana_data:

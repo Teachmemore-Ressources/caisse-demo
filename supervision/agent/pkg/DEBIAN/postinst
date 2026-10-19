@@ -1,0 +1,49 @@
+#!/bin/sh
+# postinst de storepos-kiosk-monitoring
+set -e
+
+case "$1" in
+    configure)
+        # Utilisateur de l'agent (créé par le paquet « alloy » s'il est installé) : lecture des journaux
+        getent passwd alloy >/dev/null 2>&1 || adduser --system --group --home /var/lib/alloy --no-create-home alloy >/dev/null
+        adduser alloy systemd-journal >/dev/null 2>&1 || true
+
+        install -d -m 0755 -o alloy -g alloy /var/lib/storepos-kiosk/alloy
+        # Dossier des mesures : l'application (caissepos) et le script (root) écrivent, l'agent (alloy) lit
+        if id caissepos >/dev/null 2>&1; then
+            install -d -m 0755 -o caissepos -g caissepos /var/lib/storepos-kiosk/metrics
+        else
+            install -d -m 0755 /var/lib/storepos-kiosk/metrics
+        fi
+        # Les réglages contiennent des identifiants
+        chown root:alloy /etc/default/storepos-kiosk-monitoring
+        chmod 0640 /etc/default/storepos-kiosk-monitoring
+
+        systemctl daemon-reload || true
+        systemctl enable --now storepos-kiosk-metrics.timer >/dev/null 2>&1 || true
+        systemctl enable storepos-kiosk-alloy.service >/dev/null 2>&1 || true
+        if [ -x /usr/bin/alloy ]; then
+            systemctl restart storepos-kiosk-alloy.service >/dev/null 2>&1 || true
+        fi
+
+        echo
+        echo "=== Supervision installée ==="
+        if [ ! -x /usr/bin/alloy ]; then
+            echo "Grafana Alloy n'est pas installé : ajoutez le dépôt Grafana puis « sudo apt install alloy »."
+        fi
+        echo "1. Inscrire la caisse :  sudo storepos-kiosk-monitoring-enroll --help"
+        echo "2. Vérifier :            sudo storepos-kiosk-monitoring-check"
+        echo "L'application publiera ses mesures au prochain démarrage : relancez-la hors ouverture du magasin"
+        echo "(sudo systemctl restart storepos) ou attendez le prochain redémarrage de la caisse."
+    ;;
+
+    abort-upgrade|abort-remove|abort-deconfigure)
+    ;;
+
+    *)
+        echo "postinst called with unknown argument \`$1'" >&2
+        exit 1
+    ;;
+esac
+
+exit 0

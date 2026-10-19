@@ -1,0 +1,84 @@
+#!/bin/bash
+#
+# storepos-kiosk-glpi-enroll : inscrit cette caisse dans l'inventaire GLPI (écrit les réglages du serveur de l'agent GLPI).
+#
+# Usage le plus simple (la caisse est déjà inscrite à la supervision : enseigne, magasin, poste et identifiants sont repris) :
+#   sudo storepos-kiosk-glpi-enroll --server-url https://glpi.exemple.fr/front/inventory.php
+#
+# Usage complet :
+#   sudo storepos-kiosk-glpi-enroll --server-url https://glpi.exemple.fr/front/inventory.php \
+#        --enseigne LECLERC --magasin LYON-01 --poste 2 --user LECLERC --password '...'
+#   Options : --no-run (ne lance pas un premier inventaire tout de suite)
+#
+# Les identifiants sont ceux de l'enseigne (les mêmes que pour la supervision). Le serveur les vérifie avant GLPI.
+# L'étiquette envoyée à GLPI est « enseigne/magasin/poste » : elle sert aux règles d'affectation d'entité de GLPI.
+set -euo pipefail
+# STOREPOS_TEST=1 (tests automatiques uniquement) : autorise d'autres chemins et un utilisateur non root
+SUP_CONF="${STOREPOS_MONITORING_CONF:-/etc/default/storepos-kiosk-monitoring}"
+CONF_DIR="${GLPI_CONF_DIR:-/etc/glpi-agent/conf.d}"
+CIBLE="$CONF_DIR/50-storepos-kiosk-serveur.cfg"
+
+if [ "${STOREPOS_TEST:-0}" != "1" ] && [ "$(id -u)" -ne 0 ]; then echo "Exécuter avec sudo." >&2; exit 1; fi
+
+URL=""; USR=""; PASS=""; ENS=""; MAG=""; POS=""; LANCER=1
+# valeurs reprises de la supervision si la caisse y est déjà inscrite
+if [ -f "$SUP_CONF" ]; then
+    set +u
+    # shellcheck disable=SC1090
+    . "$SUP_CONF"
+    set -u
+    USR="${METRICS_USER:-}"; PASS="${METRICS_PASSWORD:-}"; ENS="${ENSEIGNE:-}"; MAG="${MAGASIN:-}"; POS="${POSTE:-}"
+fi
+
+while [ $# -gt 0 ]; do
+    case "$1" in
+        --server-url) URL="$2"; shift 2 ;;
+        --user) USR="$2"; shift 2 ;;
+        --password) PASS="$2"; shift 2 ;;
+        --enseigne) ENS="$2"; shift 2 ;;
+        --magasin) MAG="$2"; shift 2 ;;
+        --poste) POS="$2"; shift 2 ;;
+        --no-run) LANCER=0; shift ;;
+        -h|--help) sed -n '3,15p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
+        *) echo "Argument inconnu : $1 (voir --help)" >&2; exit 1 ;;
+    esac
+done
+
+[ -n "$URL" ] || { echo "--server-url est obligatoire (voir --help)." >&2; exit 1; }
+case "$URL" in https://*|http://localhost*|http://127.0.0.1*) ;; *) echo "L'adresse du serveur doit être en https:// (reçu : '$URL')" >&2; exit 1 ;; esac
+for v in "$USR" "$PASS"; do
+    [ -n "$v" ] || { echo "Identifiant ou mot de passe manquant : les renseigner (--user, --password) ou inscrire d'abord la supervision." >&2; exit 1; }
+    case "$v" in *\'*|*\"*|*\\*|*'#'*|*$'\n'*|*' '*) echo "Les identifiants ne doivent pas contenir de quote, antislash, #, espace ni saut de ligne." >&2; exit 1 ;; esac
+done
+case "$URL" in *\'*|*\"*|*' '*|*$'\n'*) echo "Adresse invalide." >&2; exit 1 ;; esac
+for v in "$ENS" "$MAG" "$POS"; do
+    case "$v" in *[!A-Za-z0-9._-]*|'') echo "Enseigne, magasin ou poste manquant ou invalide : '$v' (lettres, chiffres, . _ - ; voir --help)" >&2; exit 1 ;; esac
+done
+[ -d "$CONF_DIR" ] || { echo "Dossier $CONF_DIR introuvable (paquet glpi-agent installé ?)." >&2; exit 1; }
+
+umask 077
+TMP=$(mktemp "$CONF_DIR/.50-storepos.XXXXXX")
+cat > "$TMP" <<EOF
+# Inventaire GLPI de la caisse : écrit par storepos-kiosk-glpi-enroll le $(date '+%Y-%m-%d %H:%M')
+server = $URL
+user = $USR
+password = $PASS
+tag = $ENS/$MAG/$POS
+EOF
+chown root:root "$TMP" 2>/dev/null || true
+chmod 0600 "$TMP"
+mv -f "$TMP" "$CIBLE"
+
+echo "Caisse inscrite à l'inventaire GLPI : enseigne=$ENS magasin=$MAG poste=$POS"
+[ "${STOREPOS_TEST:-0}" = "1" ] && exit 0
+if command -v glpi-agent >/dev/null 2>&1; then
+    systemctl enable --now glpi-agent.service >/dev/null 2>&1 || true
+    systemctl restart glpi-agent.service || true
+    if [ "$LANCER" -eq 1 ]; then
+        echo "Premier inventaire en cours…"
+        glpi-agent --force >/dev/null 2>&1 && echo "Inventaire envoyé." || echo "L'envoi a échoué : voir  sudo storepos-kiosk-glpi-check" >&2
+    fi
+    echo "Contrôle : sudo storepos-kiosk-glpi-check"
+else
+    echo "L'agent GLPI n'est pas installé (glpi-agent). Voir : sudo storepos-kiosk-glpi-check" >&2
+fi

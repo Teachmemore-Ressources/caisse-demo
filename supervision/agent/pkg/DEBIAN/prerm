@@ -1,0 +1,20 @@
+#!/bin/sh
+# prerm de storepos-kiosk-monitoring
+set -e
+
+case "$1" in
+    remove|deconfigure)
+        systemctl stop storepos-kiosk-alloy.service 2>/dev/null || true
+        systemctl disable storepos-kiosk-alloy.service 2>/dev/null || true
+        systemctl stop storepos-kiosk-metrics.timer 2>/dev/null || true
+        systemctl disable storepos-kiosk-metrics.timer 2>/dev/null || true
+    ;;
+    upgrade|failed-upgrade)
+    ;;
+    *)
+        echo "prerm called with unknown argument \`$1'" >&2
+        exit 1
+    ;;
+esac
+
+exit 0

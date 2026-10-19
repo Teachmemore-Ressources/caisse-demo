@@ -1,0 +1,19 @@
+# Grafana joignable depuis Internet, PROTÉGÉ PAR UNE CONNEXION SSO (compte d'entreprise + double authentification).
+# À utiliser avec docker-compose.sso.yml. Pour l'activer : copier ce fichier en « grafana.caddy » (dans ce dossier)
+# puis :  docker compose exec caddy caddy reload --config /etc/caddy/Caddyfile --adapter caddyfile
+#
+# Si les administrateurs préfèrent que Grafana ne soit PAS public : ne pas copier ce fichier et utiliser
+# docker-compose.prive.yml (accès par tunnel SSH ou VPN d'administration).
+{$GRAFANA_DOMAIN} {
+	log {
+		output stdout
+		format json
+	}
+	header {
+		-Server
+		Strict-Transport-Security "max-age=31536000"
+		X-Content-Type-Options "nosniff"
+		X-Frame-Options "SAMEORIGIN"
+	}
+	reverse_proxy grafana:3000
+}

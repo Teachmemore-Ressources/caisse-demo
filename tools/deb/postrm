@@ -1,0 +1,35 @@
+#!/bin/sh
+# postrm de caisse-demo : retire les raccourcis du bureau à la désinstallation (pas lors d'une mise à jour).
+set -e
+
+APP_ID="caisse-demo"
+
+case "$1" in
+    remove|purge)
+        rm -f "/etc/skel/Desktop/$APP_ID.desktop"
+        getent passwd | awk -F: '$3 >= 1000 && $3 < 60000 { print $1 ":" $6 }' | while IFS=: read -r user home; do
+            [ -d "$home" ] || continue
+            rm -f "$home/Desktop/$APP_ID.desktop" "$home/Bureau/$APP_ID.desktop"
+            if command -v xdg-user-dir >/dev/null 2>&1; then
+                desk=$(runuser -u "$user" -- env HOME="$home" xdg-user-dir DESKTOP 2>/dev/null || true)
+                [ -n "$desk" ] && rm -f "$desk/$APP_ID.desktop"
+            fi
+        done
+        if command -v gtk-update-icon-cache >/dev/null 2>&1; then
+            gtk-update-icon-cache -q -t -f /usr/share/icons/hicolor >/dev/null 2>&1 || true
+        fi
+        if command -v update-desktop-database >/dev/null 2>&1; then
+            update-desktop-database -q /usr/share/applications >/dev/null 2>&1 || true
+        fi
+    ;;
+
+    upgrade|failed-upgrade|abort-install|abort-upgrade|disappear)
+    ;;
+
+    *)
+        echo "postrm called with unknown argument \`$1'" >&2
+        exit 1
+    ;;
+esac
+
+exit 0

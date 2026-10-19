@@ -1,0 +1,37 @@
+# Copier en « terraform.tfvars » et adapter. Ne pas versionner terraform.tfvars s'il contient un secret.
+
+region                   = "eu-west-3"
+availability_zone_suffix = "a"
+name                     = "passerelle-caisses"
+
+domaine_metrics = "metrics.exemple.fr"
+domaine_logs    = "logs.exemple.fr"
+acme_email      = "admin@exemple.fr"
+
+# Zone Route 53 qui contient ces noms ; laisser vide si votre DNS est ailleurs (vous créerez les enregistrements A, voir `terraform output`).
+route53_zone_id = ""
+
+# --- Grafana : choisir UN mode ---
+# prive : jamais public, accès par tunnel AWS Systems Manager (rien à ouvrir, pas de VPN).
+grafana_mode = "prive"
+
+# sso : public, connexion Google (+ 2FA imposé dans la console Google). Décommenter et compléter.
+# grafana_mode      = "sso"
+# domaine_grafana   = "grafana.exemple.fr"
+# sso_client_id     = "xxxxxxxx.apps.googleusercontent.com"
+# sso_client_secret = "GOCSPX-..."        # de préférence via : export TF_VAR_sso_client_secret=...
+# sso_domaines      = "exemple.fr"
+
+alert_email = "admin@exemple.fr"          # prévenu en cas de panne matérielle ; vide = pas d'e-mail
+
+# instance_type  = "t3.medium"      # essai ; production : c6i.xlarge
+# data_volume_gb = 30
+
+# Essai (defaut) : `terraform destroy` supprime tout d'un coup. PRODUCTION : environnement_test = false.
+environnement_test = true
+budget_mensuel_usd = 100                  # alerte e-mail a 50 % et 90 % ; 0 = aucun budget
+
+# --- Inventaire GLPI (voir ../GUIDE-GLPI.md) : ajoute GLPI + MariaDB sur le même serveur ---
+# activer_glpi  = true
+# domaine_glpi  = "glpi.exemple.fr"         # enregistrement A vers l'IP du serveur (Cloudflare : nuage gris)
+# instance_type = "t3.large"                # 8 Go recommandés avec GLPI

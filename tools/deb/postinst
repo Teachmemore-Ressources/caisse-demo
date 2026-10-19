@@ -1,0 +1,52 @@
+#!/bin/sh
+# postinst de caisse-demo : met à jour les caches d'icônes et crée le raccourci sur le bureau.
+set -e
+
+APP_ID="caisse-demo"
+SRC="/usr/share/applications/$APP_ID.desktop"
+
+case "$1" in
+    configure)
+        # Icônes et menu des applications
+        if command -v gtk-update-icon-cache >/dev/null 2>&1; then
+            gtk-update-icon-cache -q -t -f /usr/share/icons/hicolor >/dev/null 2>&1 || true
+        fi
+        if command -v update-desktop-database >/dev/null 2>&1; then
+            update-desktop-database -q /usr/share/applications >/dev/null 2>&1 || true
+        fi
+
+        # Raccourci sur le bureau des futurs utilisateurs
+        install -d -m 0755 /etc/skel/Desktop
+        install -m 0755 "$SRC" "/etc/skel/Desktop/$APP_ID.desktop"
+
+        # Raccourci sur le bureau des utilisateurs existants (comptes réels, hors compte kiosque)
+        getent passwd | awk -F: '$3 >= 1000 && $3 < 60000 && $1 != "caissepos" && $7 !~ /(nologin|false)$/ { print $1 ":" $6 }' |
+        while IFS=: read -r user home; do
+            [ -d "$home" ] || continue
+            desk=""
+            if command -v xdg-user-dir >/dev/null 2>&1; then
+                desk=$(runuser -u "$user" -- env HOME="$home" xdg-user-dir DESKTOP 2>/dev/null || true)
+            fi
+            if [ -z "$desk" ] || [ "$desk" = "$home" ]; then desk="$home/Desktop"; fi
+            mkdir -p "$desk"
+            chown "$user" "$desk" 2>/dev/null || true
+            cp "$SRC" "$desk/$APP_ID.desktop"
+            chown "$user" "$desk/$APP_ID.desktop" 2>/dev/null || true
+            chmod 0755 "$desk/$APP_ID.desktop"
+            # GNOME : marque le lanceur comme fiable pour qu'il s'ouvre au double-clic
+            if command -v gio >/dev/null 2>&1; then
+                runuser -u "$user" -- gio set "$desk/$APP_ID.desktop" metadata::trusted true >/dev/null 2>&1 || true
+            fi
+        done
+    ;;
+
+    abort-upgrade|abort-remove|abort-deconfigure)
+    ;;
+
+    *)
+        echo "postinst called with unknown argument \`$1'" >&2
+        exit 1
+    ;;
+esac
+
+exit 0

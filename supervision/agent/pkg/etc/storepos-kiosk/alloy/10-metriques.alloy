@@ -1,0 +1,85 @@
+// Supervision de la caisse : les mesures partent EN SORTIE vers Prometheus / Mimir / Grafana Cloud
+// (remote_write). Aucun port n'est ouvert sur la caisse, rien n'est « scrapé » depuis l'extérieur.
+// Les réglages (adresse, identifiants, étiquettes) sont dans /etc/default/storepos-kiosk-monitoring.
+
+logging {
+  level  = "warn"
+  format = "logfmt"
+}
+
+prometheus.remote_write "serveur" {
+  endpoint {
+    url = sys.env("METRICS_URL")
+
+    basic_auth {
+      username = sys.env("METRICS_USER")
+      password = sys.env("METRICS_PASSWORD")
+    }
+
+    // Cloudflare Access (facultatif) : jeton de service qui prouve que cet envoi vient d'une caisse autorisée.
+    // Vide = en-têtes inoffensifs ignorés ; renseigné par storepos-kiosk-monitoring-enroll --cf-access-id/--cf-access-secret.
+    headers = {
+      "CF-Access-Client-Id"     = sys.env("CF_ACCESS_ID"),
+      "CF-Access-Client-Secret" = sys.env("CF_ACCESS_SECRET"),
+    }
+
+    // En cas de coupure réseau, remote_write garde les mesures sur disque (WAL, quelques heures) et les rejoue.
+    queue_config {
+      max_shards = 2
+      capacity   = 2500
+    }
+  }
+
+  // Étiquettes ajoutées à TOUTES les séries : c'est ce qui permet de filtrer par enseigne, magasin ou caisse.
+  external_labels = {
+    enseigne = sys.env("ENSEIGNE"),
+    magasin  = sys.env("MAGASIN"),
+    poste    = sys.env("POSTE"),
+    machine  = sys.env("MACHINE_ID"),
+  }
+}
+
+// Mesures du système (processeur, mémoire, disque, réseau, services systemd) + fichiers « textfile » :
+//  - caisse.prom : écrit par l'application de caisse (tickets en attente, version, ventes du jour…)
+//  - kiosk.prom  : écrit par le script storepos-kiosk-metrics (versions des paquets, périphériques USB…)
+prometheus.exporter.unix "caisse" {
+  set_collectors = ["cpu", "diskstats", "filesystem", "loadavg", "meminfo", "netdev", "uname", "time", "uptime", "stat", "os", "systemd", "textfile", "hwmon", "thermal_zone"]
+
+  textfile {
+    directory = "/var/lib/storepos-kiosk/metrics"
+  }
+
+  systemd {
+    unit_include = "(storepos|lightdm|ssh|sshd|teamviewerd|storepos-kiosk-alloy)\\.service"
+  }
+
+  filesystem {
+    fs_types_exclude = "^(autofs|binfmt_misc|bpf|cgroup2?|configfs|debugfs|devpts|devtmpfs|fusectl|hugetlbfs|iso9660|mqueue|nsfs|overlay|proc|procfs|pstore|rpc_pipefs|securityfs|selinuxfs|squashfs|sysfs|tracefs|tmpfs)$"
+  }
+}
+
+prometheus.scrape "caisse" {
+  job_name        = "caisse"
+  targets         = prometheus.exporter.unix.caisse.targets
+  forward_to      = [prometheus.relabel.reduire.receiver]
+  scrape_interval = "60s"
+  scrape_timeout  = "30s"
+}
+
+// À 6000 caisses, chaque série compte : on retire ce qui ne sert à rien.
+prometheus.relabel "reduire" {
+  forward_to = [prometheus.remote_write.serveur.receiver]
+
+  // Les cibles de l'exporteur portent déjà un job (« integrations/unix ») qui l'emporte sur job_name :
+  // on impose « caisse », sur lequel reposent le tableau de bord et les alertes.
+  rule {
+    target_label = "job"
+    replacement  = "caisse"
+  }
+
+  rule {
+    source_labels = ["__name__"]
+    regex         = "go_.*|process_.*|promhttp_.*|node_scrape_collector_duration_seconds"
+    action        = "drop"
+  }
+}

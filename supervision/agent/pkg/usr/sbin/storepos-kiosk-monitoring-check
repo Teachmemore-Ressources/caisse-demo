@@ -1,0 +1,59 @@
+#!/bin/bash
+#
+# storepos-kiosk-monitoring-check : diagnostic de la supervision de cette caisse (lecture seule).
+# Usage : sudo storepos-kiosk-monitoring-check        Code de sortie : 0 si tout est bon, 1 sinon.
+
+CONF="/etc/default/storepos-kiosk-monitoring"
+DIR="/var/lib/storepos-kiosk/metrics"
+FAIL=0
+ok()   { printf '  [ OK ] %s\n' "$*"; }
+ko()   { printf '  [ KO ] %s\n' "$*"; FAIL=1; }
+warn() { printf '  [ !! ] %s\n' "$*"; }
+section() { printf '\n== %s ==\n' "$*"; }
+
+[ -r "$CONF" ] || { echo "Impossible de lire $CONF (sudo ?)"; exit 1; }
+set +u; . "$CONF"; set -u 2>/dev/null || true
+
+section "Réglages"
+printf '  enseigne=%s magasin=%s poste=%s machine=%s\n' "${ENSEIGNE:-?}" "${MAGASIN:-?}" "${POSTE:-?}" "${MACHINE_ID:-?}"
+printf '  mesures -> %s (utilisateur : %s, mot de passe : %s)\n' "${METRICS_URL:-?}" "${METRICS_USER:-vide}" "$([ -n "${METRICS_PASSWORD:-}" ] && echo renseigné || echo VIDE)"
+printf '  journaux -> %s\n' "${LOGS_URL:-?}"
+if [ -n "${CF_ACCESS_ID:-}" ]; then printf '  Cloudflare Access : jeton de service renseigné (%s…)\n' "$(printf '%s' "$CF_ACCESS_ID" | cut -c1-8)"; fi
+[ -n "${MACHINE_ID:-}" ] && ok "caisse inscrite" || ko "caisse non inscrite : sudo storepos-kiosk-monitoring-enroll --help"
+case "${METRICS_URL:-}" in *exemple.fr*) ko "METRICS_URL est encore la valeur d'exemple" ;; esac
+
+section "Agent (Grafana Alloy)"
+if [ -x /usr/bin/alloy ]; then ok "alloy installé ($(/usr/bin/alloy --version 2>/dev/null | head -1))"; else ko "alloy absent : ajouter le dépôt Grafana puis « apt install alloy » (voir la documentation)"; fi
+systemctl is-active --quiet storepos-kiosk-alloy.service && ok "storepos-kiosk-alloy actif" || ko "storepos-kiosk-alloy inactif (journalctl -u storepos-kiosk-alloy -n 30)"
+if curl -fsS --max-time 3 http://127.0.0.1:12345/-/ready >/dev/null 2>&1; then ok "agent prêt (interface locale 127.0.0.1:12345)"; else warn "interface locale de l'agent injoignable"; fi
+systemctl is-active --quiet storepos-kiosk-metrics.timer && ok "minuterie des mesures système active" || ko "storepos-kiosk-metrics.timer inactif"
+
+section "Fichiers de mesures"
+now=$(date +%s)
+for f in caisse.prom kiosk.prom; do
+    if [ -f "$DIR/$f" ]; then
+        age=$(( now - $(stat -c %Y "$DIR/$f") ))
+        if [ "$age" -le 180 ]; then ok "$f à jour (écrit il y a ${age} s)"; else ko "$f périmé (écrit il y a ${age} s)"; fi
+    else
+        [ "$f" = "caisse.prom" ] && warn "caisse.prom absent : l'application de caisse n'est pas lancée, ou pas redémarrée depuis l'installation" || ko "$f absent"
+    fi
+done
+
+section "Liaison avec le serveur de mesures"
+if [ -n "${METRICS_URL:-}" ]; then
+    cf=()
+    [ -n "${CF_ACCESS_ID:-}" ] && cf=(-H "CF-Access-Client-Id: $CF_ACCESS_ID" -H "CF-Access-Client-Secret: ${CF_ACCESS_SECRET:-}")
+    code=$(curl -sS -o /dev/null -m 10 -w '%{http_code}' -u "${METRICS_USER:-}:${METRICS_PASSWORD:-}" "${cf[@]}" -X POST -H 'Content-Type: application/x-protobuf' --data-binary '' "$METRICS_URL" 2>/dev/null || echo "000")
+    case "$code" in
+        000) ko "serveur injoignable (réseau, DNS, certificat ou heure de la caisse fausse)" ;;
+        302|303) ko "Cloudflare Access demande une connexion (code $code) : jeton de service absent, expiré ou non autorisé pour ce chemin" ;;
+        401|403) ko "serveur joint mais accès refusé (code $code) : identifiant ou jeton de service refusé" ;;
+        502|503|504|52?) ko "tunnel Cloudflare ou serveur de mesures indisponible (code $code) : vérifier cloudflared et Prometheus" ;;
+        2??|400|415) ok "serveur joint, identifiants acceptés (code $code)" ;;
+        *) warn "serveur joint, réponse inattendue : code $code" ;;
+    esac
+fi
+
+echo
+[ "$FAIL" -eq 0 ] && echo "Résultat : supervision opérationnelle." || echo "Résultat : au moins un point KO."
+exit "$FAIL"

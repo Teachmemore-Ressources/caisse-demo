@@ -1,0 +1,10 @@
+[Unit]
+Description=Mesures système de la caisse, toutes les minutes
+
+[Timer]
+OnBootSec=30
+OnUnitActiveSec=60
+AccuracySec=5
+
+[Install]
+WantedBy=timers.target

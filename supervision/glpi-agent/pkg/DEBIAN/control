@@ -1,0 +1,14 @@
+Package: storepos-kiosk-glpi
+Version: 1.0.0
+Section: admin
+Priority: optional
+Architecture: all
+Depends: glpi-agent (>= 1.15), systemd, curl
+Maintainer: Formation Linux <formation@example.com>
+Description: Inventaire d'une caisse kiosque avec GLPI (envoi sortant, aucun port ouvert)
+ Configure l'agent GLPI officiel pour une caisse : l'inventaire (matériel, système, logiciels)
+ est envoyé EN SORTIE vers le serveur GLPI, en HTTPS, avec l'identifiant de l'enseigne.
+ L'interface web de l'agent (port 62354) est désactivée : aucun port n'est ouvert sur la caisse.
+ .
+ Nécessite le paquet officiel « glpi-agent » (GitHub glpi-project/glpi-agent, version 1.15 ou plus).
+ Inscription : storepos-kiosk-glpi-enroll ; diagnostic : storepos-kiosk-glpi-check.

@@ -1,0 +1,17 @@
+# Surcharge : Grafana JAMAIS PUBLIC. Il n'écoute que sur le serveur lui-même (127.0.0.1:3000) ;
+# les administrateurs l'atteignent par un tunnel SSH ou par un petit VPN d'administration installé sur LEURS postes
+# (rien à configurer chez les clients ni sur leurs box). Ne pas copier caddy/sites/grafana.caddy.
+#
+#   docker compose -f docker-compose.yml -f docker-compose.prive.yml up -d
+#
+# Accès par tunnel SSH, depuis le poste de l'administrateur (l'adresse du poste peut changer : seule la clé SSH compte) :
+#   ssh -L 3000:127.0.0.1:3000 admin@IP-DU-SERVEUR        puis ouvrir  http://localhost:3000
+# Accès par VPN (ex. Tailscale installé sur le serveur et sur les postes) : publier sur l'adresse du VPN, par exemple
+#   ports: ["100.x.y.z:3000:3000"]   (adresse du serveur dans le VPN, jamais 0.0.0.0)
+services:
+  grafana:
+    ports:
+      - "127.0.0.1:3000:3000"
+    environment:
+      GF_SERVER_ROOT_URL: http://localhost:3000
+      GF_SECURITY_COOKIE_SECURE: "false"      # l'accès local en http:// l'exige ; le trafic reste dans le tunnel chiffré

@@ -1,0 +1,6 @@
+[Unit]
+Description=Mesures système de la caisse (versions des paquets, services, périphériques)
+
+[Service]
+Type=oneshot
+ExecStart=/usr/lib/storepos-kiosk/kiosk-metrics.sh

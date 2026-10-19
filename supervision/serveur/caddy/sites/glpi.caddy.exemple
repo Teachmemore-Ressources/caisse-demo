@@ -1,0 +1,41 @@
+# Inventaire GLPI : point d'entrée des AGENTS des caisses (jamais l'interface web).
+# À utiliser avec docker-compose.glpi.yml. Pour l'activer : copier ce fichier en « glpi.caddy » (dans ce dossier)
+# puis :  docker compose exec caddy caddy reload --config /etc/caddy/Caddyfile --adapter caddyfile
+# (passerelle-sync le fait tout seul quand GLPI est activé dans Terraform.)
+#
+# - Seul l'envoi d'inventaire passe, avec l'identifiant de l'enseigne (celui de la supervision) ;
+# - tout le reste, y compris la page de connexion et l'interface de GLPI, répond 404 depuis Internet ;
+# - l'en-tête d'authentification est retiré avant d'atteindre GLPI : le mot de passe de l'enseigne n'y arrive jamais.
+{$GLPI_DOMAIN} {
+	log {
+		output stdout
+		format json
+	}
+	header {
+		-Server
+		Strict-Transport-Security "max-age=31536000"
+		X-Content-Type-Options "nosniff"
+	}
+
+	handle /healthz {
+		respond "ok" 200
+	}
+
+	@inventaire {
+		method POST
+		path / /front/inventory.php
+	}
+	handle @inventaire {
+		import identifiants_caisses
+		request_body {
+			max_size 32MB
+		}
+		reverse_proxy {$GLPI_UPSTREAM:glpi:80} {
+			header_up -Authorization
+		}
+	}
+
+	handle {
+		respond "Non trouvé" 404
+	}
+}

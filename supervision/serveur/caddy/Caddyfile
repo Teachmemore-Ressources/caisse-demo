@@ -1,0 +1,90 @@
+# Caddy : seul point d'entrée PUBLIC de la passerelle de supervision (HTTPS, certificats Let's Encrypt automatiques).
+#
+# Règles :
+#  - les caisses n'atteignent QUE deux chemins d'envoi, protégés par un identifiant PAR ENSEIGNE (caddy/enseignes.caddy) ;
+#  - tout le reste répond 404 : ni l'interface de Prometheus, ni son API de lecture, ni celle de Loki ne sont exposées ;
+#  - l'écran Grafana n'est PAS publié ici par défaut (voir sites/ et GUIDE-SERVEUR.md).
+#
+# Pas de limitation ni de bannissement par adresse IP : derrière une box, tout un magasin partage la même adresse.
+
+{
+	email {$ACME_EMAIL}
+}
+
+# Comptes des enseignes, réutilisés par les deux points d'envoi.
+(identifiants_caisses) {
+	basic_auth {
+		import /etc/caddy/enseignes.caddy
+	}
+}
+
+# Mesures : les agents des caisses envoient ici (remote_write de Prometheus).
+{$METRICS_DOMAIN} {
+	log {
+		output stdout
+		format json
+	}
+	header {
+		-Server
+		Strict-Transport-Security "max-age=31536000"
+		X-Content-Type-Options "nosniff"
+	}
+
+	# Sonde de disponibilité pour une supervision EXTERNE de la passerelle (voir le guide) : ne révèle rien.
+	handle /healthz {
+		respond "ok" 200
+	}
+
+	@envoi {
+		method POST
+		path /api/v1/write
+	}
+	handle @envoi {
+		import identifiants_caisses
+		request_body {
+			max_size 8MB
+		}
+		reverse_proxy {$PROMETHEUS_UPSTREAM:prometheus:9090}
+	}
+
+	handle {
+		respond "Non trouvé" 404
+	}
+}
+
+# Journaux : les agents des caisses envoient ici (push de Loki).
+{$LOGS_DOMAIN} {
+	log {
+		output stdout
+		format json
+	}
+	header {
+		-Server
+		Strict-Transport-Security "max-age=31536000"
+		X-Content-Type-Options "nosniff"
+	}
+
+	handle /healthz {
+		respond "ok" 200
+	}
+
+	@envoi {
+		method POST
+		path /loki/api/v1/push
+	}
+	handle @envoi {
+		import identifiants_caisses
+		request_body {
+			max_size 16MB
+		}
+		reverse_proxy {$LOKI_UPSTREAM:loki:3100}
+	}
+
+	handle {
+		respond "Non trouvé" 404
+	}
+}
+
+# Sites optionnels (Grafana public derrière une connexion SSO) : copier sites/grafana-public.caddy.exemple
+# en sites/grafana.caddy. Sans fichier, rien n'est ajouté.
+import /etc/caddy/sites/*.caddy

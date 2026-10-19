@@ -1,0 +1,4 @@
+# Identifiants des enseignes (une par ligne :  nom  empreinte-bcrypt).
+# NE PAS MODIFIER A LA MAIN : utiliser scripts/enseigne-ajouter.sh et scripts/enseigne-revoquer.sh.
+# Le compte ci-dessous est un modèle inutilisable (mot de passe aléatoire jeté) : Caddy refuse de démarrer sans aucun compte.
+_modele_inutilisable $2a$14$Uq0cK6ndkmS4SLdkjHDP6.NCkGIm8lXyMCEQzAHqeu5Inne2rM3fi

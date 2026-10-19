@@ -1,0 +1,27 @@
+# Prometheus : reçoit les mesures POUSSÉES par les caisses (remote_write) ; il ne contacte jamais les caisses.
+# Démarré avec --web.enable-remote-write-receiver (voir docker-compose.yml).
+global:
+  scrape_interval: 60s
+  evaluation_interval: 60s
+  external_labels:
+    plateforme: supervision-caisses
+
+rule_files:
+  - /etc/prometheus/rules/*.yml
+
+alerting:
+  alertmanagers:
+    - static_configs:
+        - targets: ["alertmanager:9093"]
+
+# Après une coupure réseau, une caisse rejoue ses mesures en retard : on accepte les échantillons jusqu'à 30 minutes
+# d'ancienneté, sinon ils seraient rejetés (« out of order »).
+storage:
+  tsdb:
+    out_of_order_time_window: 30m
+
+scrape_configs:
+  # Seule cible : Prometheus lui-même (état de la plateforme).
+  - job_name: prometheus
+    static_configs:
+      - targets: ["localhost:9090"]

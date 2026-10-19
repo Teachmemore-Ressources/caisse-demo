@@ -1,0 +1,4 @@
+/etc/default/storepos-kiosk-monitoring
+/etc/storepos-kiosk/alloy/10-metriques.alloy
+/etc/storepos-kiosk/alloy/20-journaux.alloy
+/etc/systemd/system/storepos.service.d/metrics.conf

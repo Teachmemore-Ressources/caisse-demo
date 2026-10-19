@@ -1,0 +1,21 @@
+#!/bin/sh
+# postrm de storepos-kiosk-monitoring
+set -e
+
+case "$1" in
+    remove)
+        systemctl daemon-reload || true
+    ;;
+    purge)
+        rm -rf /var/lib/storepos-kiosk/alloy /var/lib/storepos-kiosk/metrics
+        systemctl daemon-reload || true
+    ;;
+    upgrade|failed-upgrade|abort-install|abort-upgrade|disappear)
+    ;;
+    *)
+        echo "postrm called with unknown argument \`$1'" >&2
+        exit 1
+    ;;
+esac
+
+exit 0

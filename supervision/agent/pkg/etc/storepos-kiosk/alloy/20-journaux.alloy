@@ -1,0 +1,57 @@
+// Journaux de la caisse envoyés EN SORTIE vers Loki (ou Grafana Cloud Logs).
+// Seuls les services utiles sont conservés : l'application, l'écran, SSH et l'agent lui-même.
+
+loki.source.journal "journal" {
+  max_age       = "12h"
+  relabel_rules = loki.relabel.journal.rules
+  forward_to    = [loki.process.filtrer.receiver]
+  labels        = { source = "journal" }
+}
+
+loki.relabel "journal" {
+  forward_to = []
+
+  rule {
+    source_labels = ["__journal__systemd_unit"]
+    target_label  = "unit"
+  }
+
+  rule {
+    source_labels = ["__journal_priority_keyword"]
+    target_label  = "niveau"
+  }
+}
+
+loki.process "filtrer" {
+  forward_to = [loki.write.serveur.receiver]
+
+  stage.match {
+    selector = "{unit!~\"storepos.service|lightdm.service|ssh.service|sshd.service|storepos-kiosk-alloy.service|storepos-kiosk-metrics.service\"}"
+    action   = "drop"
+  }
+}
+
+loki.write "serveur" {
+  endpoint {
+    url = sys.env("LOGS_URL")
+
+    basic_auth {
+      username = sys.env("LOGS_USER")
+      password = sys.env("LOGS_PASSWORD")
+    }
+
+    // Cloudflare Access (facultatif) : jeton de service qui prouve que cet envoi vient d'une caisse autorisée.
+    // Vide = en-têtes inoffensifs ignorés ; renseigné par storepos-kiosk-monitoring-enroll --cf-access-id/--cf-access-secret.
+    headers = {
+      "CF-Access-Client-Id"     = sys.env("CF_ACCESS_ID"),
+      "CF-Access-Client-Secret" = sys.env("CF_ACCESS_SECRET"),
+    }
+  }
+
+  external_labels = {
+    enseigne = sys.env("ENSEIGNE"),
+    magasin  = sys.env("MAGASIN"),
+    poste    = sys.env("POSTE"),
+    machine  = sys.env("MACHINE_ID"),
+  }
+}

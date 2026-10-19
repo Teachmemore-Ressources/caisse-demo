@@ -1,0 +1,10 @@
+apiVersion: 1
+
+providers:
+  - name: caisses
+    folder: Caisses
+    type: file
+    disableDeletion: false
+    allowUiUpdates: false
+    options:
+      path: /var/lib/grafana/dashboards

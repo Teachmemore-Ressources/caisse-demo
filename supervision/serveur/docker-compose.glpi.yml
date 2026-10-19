@@ -1,0 +1,54 @@
+# Surcharge : ajoute l'INVENTAIRE GLPI à la passerelle (GLPI + MariaDB), derrière le même Caddy.
+#
+#   docker compose -f docker-compose.yml -f docker-compose.prive.yml -f docker-compose.glpi.yml up -d
+#
+# Ce que les caisses atteignent : UNIQUEMENT l'envoi d'inventaire (POST / et POST /front/inventory.php), protégé par l'identifiant
+# de leur enseigne (voir caddy/sites/glpi.caddy.exemple). L'interface web de GLPI n'est PAS publique : elle n'écoute que sur
+# 127.0.0.1:8081 du serveur (tunnel SSH ou Systems Manager), comme Grafana en mode privé.
+#
+# Variables à définir dans .env : GLPI_DOMAIN, GLPI_DB_PASSWORD, GLPI_DB_ROOT_PASSWORD (voir .env.example).
+services:
+  caddy:
+    environment:
+      GLPI_DOMAIN: ${GLPI_DOMAIN:?définir GLPI_DOMAIN dans .env (nom DNS de l'inventaire)}
+
+  glpi:
+    image: glpi/glpi:11.0.11
+    restart: unless-stopped
+    environment:
+      # Avec ces cinq variables, l'image installe ou met à jour GLPI toute seule au démarrage.
+      GLPI_DB_HOST: glpi-db
+      GLPI_DB_PORT: "3306"
+      GLPI_DB_NAME: glpi
+      GLPI_DB_USER: glpi
+      GLPI_DB_PASSWORD: ${GLPI_DB_PASSWORD:?définir GLPI_DB_PASSWORD dans .env}
+    volumes:
+      - glpi_data:/var/glpi
+    ports:
+      - "127.0.0.1:8081:80"
+    expose: ["80"]
+    depends_on:
+      glpi-db:
+        condition: service_healthy
+
+  glpi-db:
+    image: mariadb:10.11
+    restart: unless-stopped
+    command: ["--character-set-server=utf8mb4", "--collation-server=utf8mb4_unicode_ci"]
+    environment:
+      MARIADB_DATABASE: glpi
+      MARIADB_USER: glpi
+      MARIADB_PASSWORD: ${GLPI_DB_PASSWORD:?définir GLPI_DB_PASSWORD dans .env}
+      MARIADB_ROOT_PASSWORD: ${GLPI_DB_ROOT_PASSWORD:?définir GLPI_DB_ROOT_PASSWORD dans .env}
+    volumes:
+      - glpi_db_data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+    expose: ["3306"]
+
+volumes:
+  glpi_data:
+  glpi_db_data:

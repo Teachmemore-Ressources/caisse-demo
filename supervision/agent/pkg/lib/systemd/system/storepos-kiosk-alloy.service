@@ -1,0 +1,31 @@
+[Unit]
+Description=Supervision de la caisse (Grafana Alloy) : envoi sortant des mesures et des journaux
+After=network-online.target
+Wants=network-online.target
+ConditionPathExists=/usr/bin/alloy
+
+[Service]
+Type=simple
+User=alloy
+Group=alloy
+SupplementaryGroups=systemd-journal
+EnvironmentFile=/etc/default/storepos-kiosk-monitoring
+# --disable-reporting : aucune télémétrie d'usage envoyée à l'éditeur. Interface locale seulement (127.0.0.1).
+ExecStart=/usr/bin/alloy run --disable-reporting --server.http.listen-addr=127.0.0.1:12345 --storage.path=/var/lib/storepos-kiosk/alloy /etc/storepos-kiosk/alloy
+Restart=always
+RestartSec=10
+TimeoutStopSec=30
+
+# Durcissement : l'agent ne lit que ce dont il a besoin et n'écrit que dans son dossier
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+ProtectKernelTunables=false
+ProtectControlGroups=true
+ProtectKernelModules=true
+RestrictRealtime=true
+ReadWritePaths=/var/lib/storepos-kiosk/alloy
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,213 @@
+# Tests unitaires des alertes : « promtool test rules supervision/tests/caisses.rules.test.yml »
+rule_files:
+  - ../serveur/prometheus/rules/caisses.yml
+
+evaluation_interval: 1m
+
+tests:
+  # --- caisse muette : présente 30 min (à 8 h UTC), puis plus rien ----------------------------------------
+  # Les séries commencent par 8 h de « rien » (_x480) : l'alerte ne vaut qu'en heures d'ouverture (hour() UTC).
+  - interval: 1m
+    input_series:
+      - series: 'up{job="caisse",enseigne="demo",magasin="LYON-01",poste="1",machine="m1"}'
+        values: '_x480 1x30 _x200'
+      - series: 'up{job="caisse",enseigne="demo",magasin="LYON-01",poste="2",machine="m2"}'
+        values: '_x480 1x230'
+    alert_rule_test:
+      - eval_time: 500m          # la caisse 1 est encore là
+        alertname: CaisseMuette
+        exp_alerts: []
+      - eval_time: 525m          # muette depuis ~10 min : en attente, pas encore d'alerte (délai de 20 min : box ADSL)
+        alertname: CaisseMuette
+        exp_alerts: []
+      - eval_time: 560m          # muette depuis plus de 20 min en heures d'ouverture : alerte (la caisse 2, toujours là, ne déclenche pas)
+        alertname: CaisseMuette
+        exp_alerts:
+          - exp_labels:
+              severity: critical
+              enseigne: demo
+              magasin: LYON-01
+              poste: "1"
+              machine: m1
+            exp_annotations:
+              summary: "Caisse muette : LYON-01 poste 1"
+              description: "Plus aucune mesure de demo / LYON-01 poste 1 (machine m1) depuis plus de 20 minutes en heures d'ouverture. Vérifier la box, le réseau et l'alimentation du magasin."
+
+  # --- la nuit, une caisse éteinte n'est PAS une panne ------------------------------------------------------
+  - interval: 1m
+    input_series:
+      - series: 'up{job="caisse",enseigne="demo",magasin="LYON-01",poste="1",machine="m1"}'
+        values: '_x1200 1x30 _x200'     # active à 20 h UTC, éteinte à 20 h 30
+    alert_rule_test:
+      - eval_time: 1330m               # 22 h 10 UTC : muette depuis longtemps, mais hors des heures d'ouverture
+        alertname: CaisseMuette
+        exp_alerts: []
+
+  # --- panne globale : la moitié des caisses disparaît d'un coup ---------------------------------------------
+  - interval: 1m
+    input_series:
+      - series: 'up{job="caisse",enseigne="demo",magasin="LYON-01",poste="1",machine="m1"}'
+        values: '_x480 1x30 _x300'
+      - series: 'up{job="caisse",enseigne="demo",magasin="LYON-01",poste="2",machine="m2"}'
+        values: '_x480 1x30 _x300'
+      - series: 'up{job="caisse",enseigne="demo",magasin="LYON-01",poste="3",machine="m3"}'
+        values: '_x480 1x30 _x300'
+      - series: 'up{job="caisse",enseigne="demo",magasin="LYON-01",poste="4",machine="m4"}'
+        values: '_x480 1x30 _x300'
+      - series: 'up{job="caisse",enseigne="demo",magasin="LYON-01",poste="5",machine="m5"}'
+        values: '_x480 1x30 _x300'
+      - series: 'up{job="caisse",enseigne="demo",magasin="LYON-01",poste="6",machine="m6"}'
+        values: '_x480 1x300'
+      - series: 'up{job="caisse",enseigne="demo",magasin="LYON-01",poste="7",machine="m7"}'
+        values: '_x480 1x300'
+      - series: 'up{job="caisse",enseigne="demo",magasin="LYON-01",poste="8",machine="m8"}'
+        values: '_x480 1x300'
+      - series: 'up{job="caisse",enseigne="demo",magasin="LYON-01",poste="9",machine="m9"}'
+        values: '_x480 1x300'
+      - series: 'up{job="caisse",enseigne="demo",magasin="LYON-01",poste="10",machine="m10"}'
+        values: '_x480 1x300'
+    alert_rule_test:
+      - eval_time: 520m
+        alertname: PanneGlobaleProbable
+        exp_alerts: []             # trop tôt : la condition dure moins de 10 min
+      - eval_time: 560m
+        alertname: PanneGlobaleProbable
+        exp_alerts:
+          - exp_labels:
+              severity: critical
+            exp_annotations:
+              summary: "Plus de 30 % des caisses ne répondent plus : panne probable du serveur de réception"
+              description: "Vérifier dans l'ordre : le serveur de réception et ses conteneurs (Caddy, Prometheus), le certificat HTTPS et le nom de domaine, puis l'identifiant partagé des caisses (changé ou révoqué par erreur)."
+
+  # --- une seule caisse sur dix muette : panne locale, pas de panne globale -----------------------------------
+  - interval: 1m
+    input_series:
+      - series: 'up{job="caisse",enseigne="demo",magasin="LYON-01",poste="1",machine="m1"}'
+        values: '_x480 1x30 _x300'
+      - series: 'up{job="caisse",enseigne="demo",magasin="LYON-01",poste="2",machine="m2"}'
+        values: '_x480 1x300'
+      - series: 'up{job="caisse",enseigne="demo",magasin="LYON-01",poste="3",machine="m3"}'
+        values: '_x480 1x300'
+      - series: 'up{job="caisse",enseigne="demo",magasin="LYON-01",poste="4",machine="m4"}'
+        values: '_x480 1x300'
+      - series: 'up{job="caisse",enseigne="demo",magasin="LYON-01",poste="5",machine="m5"}'
+        values: '_x480 1x300'
+      - series: 'up{job="caisse",enseigne="demo",magasin="LYON-01",poste="6",machine="m6"}'
+        values: '_x480 1x300'
+      - series: 'up{job="caisse",enseigne="demo",magasin="LYON-01",poste="7",machine="m7"}'
+        values: '_x480 1x300'
+      - series: 'up{job="caisse",enseigne="demo",magasin="LYON-01",poste="8",machine="m8"}'
+        values: '_x480 1x300'
+      - series: 'up{job="caisse",enseigne="demo",magasin="LYON-01",poste="9",machine="m9"}'
+        values: '_x480 1x300'
+      - series: 'up{job="caisse",enseigne="demo",magasin="LYON-01",poste="10",machine="m10"}'
+        values: '_x480 1x300'
+    alert_rule_test:
+      - eval_time: 560m
+        alertname: PanneGlobaleProbable
+        exp_alerts: []
+
+  # --- application figée : le fichier de mesures n'est plus mis à jour ---------------------------------
+  - interval: 1m
+    input_series:
+      - series: 'caisse_app_last_write_timestamp_seconds{magasin="LYON-01",poste="1"}'
+        values: '0+60x10 600x20'   # horodatage qui avance 10 min puis se fige
+    alert_rule_test:
+      - eval_time: 5m
+        alertname: ApplicationFigee
+        exp_alerts: []
+      - eval_time: 25m
+        alertname: ApplicationFigee
+        exp_alerts:
+          - exp_labels:
+              severity: critical
+              magasin: LYON-01
+              poste: "1"
+            exp_annotations:
+              summary: "Application figée ou arrêtée : LYON-01 poste 1"
+              description: "L'application de caisse n'a pas actualisé ses mesures depuis plus de 3 minutes."
+
+  # --- service arrêté ----------------------------------------------------------------------------------
+  - interval: 1m
+    input_series:
+      - series: 'node_systemd_unit_state{name="storepos.service",state="active",magasin="LYON-01",poste="1"}'
+        values: '1x5 0x10'
+    alert_rule_test:
+      - eval_time: 4m
+        alertname: ServiceCaisseArrete
+        exp_alerts: []
+      - eval_time: 12m
+        alertname: ServiceCaisseArrete
+        exp_alerts:
+          - exp_labels:
+              severity: critical
+              name: storepos.service
+              state: active
+              magasin: LYON-01
+              poste: "1"
+            exp_annotations:
+              summary: "Service de caisse arrêté : LYON-01 poste 1"
+              description: "storepos.service n'est pas actif. Voir : journalctl -u storepos -n 50."
+
+  # --- tickets en attente : seuil et durée ---------------------------------------------------------------
+  - interval: 1m
+    input_series:
+      - series: 'caisse_tickets_pending{magasin="LYON-01",poste="1"}'
+        values: '0x5 25x30'
+      - series: 'caisse_tickets_pending{magasin="LYON-01",poste="2"}'
+        values: '25x5 0x30'   # pic bref, revenu à zéro : pas d'alerte
+    alert_rule_test:
+      - eval_time: 10m
+        alertname: TicketsEnAttente
+        exp_alerts: []
+      - eval_time: 30m
+        alertname: TicketsEnAttente
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+              magasin: LYON-01
+              poste: "1"
+            exp_annotations:
+              summary: "Tickets en attente d'envoi : LYON-01 poste 1"
+              description: "25 ticket(s) non acquittés par le serveur depuis plus de 15 minutes (réseau ou serveur indisponible ?)."
+
+  # --- disque presque plein ------------------------------------------------------------------------------
+  - interval: 1m
+    input_series:
+      - series: 'node_filesystem_avail_bytes{mountpoint="/",magasin="LYON-01",poste="1"}'
+        values: '50x5 5x30'
+      - series: 'node_filesystem_size_bytes{mountpoint="/",magasin="LYON-01",poste="1"}'
+        values: '100x35'
+    alert_rule_test:
+      - eval_time: 4m
+        alertname: DisquePresquePlein
+        exp_alerts: []
+      - eval_time: 30m
+        alertname: DisquePresquePlein
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+              mountpoint: /
+              magasin: LYON-01
+              poste: "1"
+            exp_annotations:
+              summary: "Disque presque plein : LYON-01 poste 1"
+              description: "Le système de fichiers est rempli à plus de 90 %."
+
+  # --- redémarrages en boucle ----------------------------------------------------------------------------
+  - interval: 1m
+    input_series:
+      - series: 'kiosk_service_restarts{unit="storepos.service",magasin="LYON-01",poste="1"}'
+        values: '0 0 1 2 3 4 5 5 5'
+    alert_rule_test:
+      - eval_time: 8m
+        alertname: RedemarragesEnBoucle
+        exp_alerts:
+          - exp_labels:
+              severity: critical
+              unit: storepos.service
+              magasin: LYON-01
+              poste: "1"
+            exp_annotations:
+              summary: "L'application redémarre en boucle : LYON-01 poste 1"
+              description: "Au moins 4 redémarrages de storepos.service dans la dernière heure."

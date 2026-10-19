@@ -1,0 +1,28 @@
+# Supervision de la caisse (Grafana Alloy) : réglages lus par storepos-kiosk-alloy.service
+# Renseigner ce fichier avec : sudo storepos-kiosk-monitoring-enroll --help
+# Contient des identifiants : lisible seulement par root et l'agent (mode 0640).
+# Après modification : sudo systemctl restart storepos-kiosk-alloy
+
+# Où envoyer les mesures (Prometheus avec receveur remote-write, Mimir, ou Grafana Cloud). HTTPS obligatoire en production.
+#   Prometheus : https://metrics.exemple.fr/api/v1/write      Mimir : https://.../api/v1/push
+METRICS_URL=https://metrics.exemple.fr/api/v1/write
+METRICS_USER=
+METRICS_PASSWORD=
+
+# Où envoyer les journaux (Loki)
+LOGS_URL=https://logs.exemple.fr/loki/api/v1/push
+LOGS_USER=
+LOGS_PASSWORD=
+
+# Cloudflare Access (si les points d'entrée sont derrière un tunnel Cloudflare protégé par un « jeton de service »)
+# Créer le jeton dans Cloudflare Zero Trust > Access > Service Auth, puis l'inscrire avec :
+#   sudo storepos-kiosk-monitoring-enroll --cf-access-id <ID> --cf-access-secret <SECRET>
+CF_ACCESS_ID=
+CF_ACCESS_SECRET=
+
+# Étiquettes de cette caisse (filtres des tableaux de bord et des alertes)
+ENSEIGNE=demo
+MAGASIN=non-defini
+POSTE=1
+# Identifiant de la machine : généré par l'inscription à partir de /etc/machine-id (unique par machine).
+MACHINE_ID=

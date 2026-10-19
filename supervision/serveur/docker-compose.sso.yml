@@ -1,0 +1,28 @@
+# Surcharge : Grafana PUBLIC, protégé par une connexion SSO (compte d'entreprise Google).
+# La double authentification (2FA) est imposée par Google, pas par Grafana (l'édition libre de Grafana n'a pas de 2FA intégrée) :
+# exiger la validation en deux étapes pour le groupe des administrateurs dans la console d'administration Google.
+#
+# 1. Créer un identifiant OAuth « Application Web » (Google Cloud > API et services > Identifiants), avec comme
+#    URI de redirection autorisée :   https://<GRAFANA_DOMAIN>/login/google
+# 2. Renseigner SSO_CLIENT_ID, SSO_CLIENT_SECRET et SSO_DOMAINES dans .env
+# 3. cp caddy/sites/grafana-public.caddy.exemple caddy/sites/grafana.caddy
+# 4. docker compose -f docker-compose.yml -f docker-compose.sso.yml up -d
+#    docker compose exec caddy caddy reload --config /etc/caddy/Caddyfile --adapter caddyfile
+#
+# Les comptes sont créés à la première connexion, mais seulement pour les domaines autorisés, avec le rôle « lecteur ».
+# Pour promouvoir un administrateur : Grafana > Administration > Utilisateurs.
+# SECOURS : le formulaire local est désactivé. Si la connexion SSO tombe en panne, relancer SANS ce fichier
+# (docker compose up -d) : le formulaire local réapparaît (compte GRAFANA_ADMIN_USER).
+services:
+  grafana:
+    environment:
+      GF_AUTH_GOOGLE_ENABLED: "true"
+      GF_AUTH_GOOGLE_NAME: "Compte d'entreprise"
+      GF_AUTH_GOOGLE_CLIENT_ID: ${SSO_CLIENT_ID:?définir SSO_CLIENT_ID dans .env}
+      GF_AUTH_GOOGLE_CLIENT_SECRET: ${SSO_CLIENT_SECRET:?définir SSO_CLIENT_SECRET dans .env}
+      GF_AUTH_GOOGLE_SCOPES: "openid email profile"
+      GF_AUTH_GOOGLE_ALLOWED_DOMAINS: ${SSO_DOMAINES:?définir SSO_DOMAINES dans .env (ex. exemple.fr)}
+      GF_AUTH_GOOGLE_ALLOW_SIGN_UP: "true"
+      GF_AUTH_GOOGLE_AUTO_LOGIN: "false"
+      GF_AUTH_DISABLE_LOGIN_FORM: "true"
+      GF_USERS_AUTO_ASSIGN_ORG_ROLE: Viewer

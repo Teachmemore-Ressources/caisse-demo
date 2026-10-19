@@ -1,0 +1,156 @@
+# Alertes de supervision des caisses. Validées par « promtool check rules » et testées par
+# « promtool test rules » (voir ../../tests/caisses.rules.test.yml).
+groups:
+  # Battement de cœur : cette alerte est TOUJOURS active. Alertmanager l'envoie en continu à un service externe
+  # (Healthchecks.io, UptimeRobot…) qui vous prévient s'il cesse de la recevoir : c'est le seul moyen de savoir
+  # que la supervision elle-même est tombée (voir le guide, « Surveiller la passerelle »).
+  - name: passerelle
+    rules:
+      - alert: Watchdog
+        expr: vector(1)
+        labels:
+          severity: none
+        annotations:
+          summary: "Battement de cœur de la passerelle (toujours actif)"
+
+  - name: caisses
+    rules:
+      # Une caisse vue dans les dernières 24 h qui n'envoie plus rien (réseau coupé, caisse éteinte, agent arrêté).
+      # - 20 minutes : une box ADSL qui redémarre ou une coupure brève ne doivent pas réveiller l'équipe.
+      # - Heures d'ouverture seulement : les caisses sont éteintes la nuit, ce n'est pas une panne.
+      #   hour() est en UTC : 6 h-19 h UTC = 7 h-20 h (hiver) ou 8 h-21 h (été) à Paris. À ajuster à vos magasins.
+      - alert: CaisseMuette
+        expr: |
+          (
+            count by (enseigne, magasin, poste, machine) (last_over_time(up{job="caisse"}[24h]))
+            unless
+            count by (enseigne, magasin, poste, machine) (up{job="caisse"})
+          )
+          and on() (hour() >= 6 and hour() < 19)
+        for: 20m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Caisse muette : {{ $labels.magasin }} poste {{ $labels.poste }}"
+          description: "Plus aucune mesure de {{ $labels.enseigne }} / {{ $labels.magasin }} poste {{ $labels.poste }} (machine {{ $labels.machine }}) depuis plus de 20 minutes en heures d'ouverture. Vérifier la box, le réseau et l'alimentation du magasin."
+
+      # Beaucoup de caisses muettes en même temps : ce n'est pas 30 pannes de magasin, c'est le serveur de réception, son accès
+      # HTTPS ou les identifiants des caisses (changés ou révoqués). Cette alerte remplace alors les alertes individuelles (voir Alertmanager).
+      - alert: PanneGlobaleProbable
+        expr: |
+          (
+            count(
+              count by (machine) (last_over_time(up{job="caisse"}[24h]))
+              unless
+              count by (machine) (up{job="caisse"})
+            )
+            /
+            count(count by (machine) (last_over_time(up{job="caisse"}[24h])))
+          ) > 0.3
+          and on() (count(count by (machine) (last_over_time(up{job="caisse"}[24h]))) >= 5)
+          and on() (hour() >= 6 and hour() < 19)
+        for: 10m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Plus de 30 % des caisses ne répondent plus : panne probable du serveur de réception"
+          description: "Vérifier dans l'ordre : le serveur de réception et ses conteneurs (Caddy, Prometheus), le certificat HTTPS et le nom de domaine, puis l'identifiant partagé des caisses (changé ou révoqué par erreur)."
+
+      # L'agent répond mais l'application n'écrit plus ses mesures : application arrêtée, plantée ou figée.
+      - alert: ApplicationFigee
+        expr: time() - caisse_app_last_write_timestamp_seconds > 180
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Application figée ou arrêtée : {{ $labels.magasin }} poste {{ $labels.poste }}"
+          description: "L'application de caisse n'a pas actualisé ses mesures depuis plus de 3 minutes."
+
+      - alert: ServiceCaisseArrete
+        expr: node_systemd_unit_state{name="storepos.service", state="active"} == 0
+        for: 3m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Service de caisse arrêté : {{ $labels.magasin }} poste {{ $labels.poste }}"
+          description: "storepos.service n'est pas actif. Voir : journalctl -u storepos -n 50."
+
+      - alert: RedemarragesEnBoucle
+        expr: changes(kiosk_service_restarts{unit="storepos.service"}[1h]) >= 4
+        labels:
+          severity: critical
+        annotations:
+          summary: "L'application redémarre en boucle : {{ $labels.magasin }} poste {{ $labels.poste }}"
+          description: "Au moins 4 redémarrages de storepos.service dans la dernière heure."
+
+      - alert: TicketsEnAttente
+        expr: caisse_tickets_pending > 20
+        for: 15m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Tickets en attente d'envoi : {{ $labels.magasin }} poste {{ $labels.poste }}"
+          description: "{{ $value }} ticket(s) non acquittés par le serveur depuis plus de 15 minutes (réseau ou serveur indisponible ?)."
+
+      - alert: TicketsEnAttenteCritique
+        expr: caisse_tickets_pending > 200
+        for: 15m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Beaucoup de tickets en attente : {{ $labels.magasin }} poste {{ $labels.poste }}"
+          description: "{{ $value }} ticket(s) en attente : risque de perte de données si la caisse tombe en panne."
+
+      - alert: SynchronisationPerdue
+        expr: caisse_sync_state == 0
+        for: 30m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Caisse hors ligne depuis 30 min : {{ $labels.magasin }} poste {{ $labels.poste }}"
+          description: "La caisse vend normalement (mode hors ligne) mais ne joint plus le serveur."
+
+      - alert: SynchronisationBloquee
+        expr: caisse_sync_state == 1 and (time() - caisse_last_sync_timestamp_seconds) > 900
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Serveur joint mais plus de synchronisation : {{ $labels.magasin }} poste {{ $labels.poste }}"
+          description: "La caisse se dit en ligne mais la dernière synchronisation réussie date de plus de 15 minutes."
+
+      - alert: DisquePresquePlein
+        expr: 100 * (1 - node_filesystem_avail_bytes{mountpoint="/"} / node_filesystem_size_bytes{mountpoint="/"}) > 90
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Disque presque plein : {{ $labels.magasin }} poste {{ $labels.poste }}"
+          description: "Le système de fichiers est rempli à plus de 90 %."
+
+      - alert: MemoireElevee
+        expr: 100 * (1 - node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes) > 90
+        for: 15m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Mémoire presque saturée : {{ $labels.magasin }} poste {{ $labels.poste }}"
+          description: "Plus de 90 % de la mémoire utilisée depuis 15 minutes."
+
+      - alert: TemperatureElevee
+        expr: max by (enseigne, magasin, poste, machine) (node_hwmon_temp_celsius) > 85
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Température élevée : {{ $labels.magasin }} poste {{ $labels.poste }}"
+          description: "Une sonde dépasse 85 °C depuis 10 minutes."
+
+      - alert: RedemarrageRequis
+        expr: kiosk_reboot_required == 1
+        for: 7d
+        labels:
+          severity: info
+        annotations:
+          summary: "Redémarrage en attente depuis 7 jours : {{ $labels.magasin }} poste {{ $labels.poste }}"
+          description: "Le système demande un redémarrage (mise à jour de sécurité installée mais non appliquée)."

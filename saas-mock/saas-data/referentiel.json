@@ -1,0 +1,125 @@
+{
+  "version": 1,
+  "magasin": "Magasin Démo Lyon",
+  "codes": {
+    "DEMO-0001": "Caisse 1",
+    "DEMO-0002": "Caisse 2",
+    "DEMO-0003": "Caisse 3"
+  },
+  "caissiers": [
+    {
+      "id": 1,
+      "nom": "Alice M.",
+      "code": "Caissier 01",
+      "role": "CAISSIER",
+      "pin": "1234"
+    },
+    {
+      "id": 2,
+      "nom": "Armel NGANDO",
+      "code": "Manager",
+      "role": "RESPONSABLE",
+      "pin": "0000"
+    },
+    {
+      "id": 3,
+      "nom": "Chloé D.",
+      "code": "Caissier 02",
+      "role": "CAISSIER",
+      "pin": "4321"
+    }
+  ],
+  "produits": [
+    {
+      "code": "5000001",
+      "nom": "Eau 50 cl",
+      "prix_cents": 120,
+      "tva_bp": 550,
+      "categorie": "Boissons"
+    },
+    {
+      "code": "5000002",
+      "nom": "Soda 33 cl",
+      "prix_cents": 190,
+      "tva_bp": 2000,
+      "categorie": "Boissons"
+    },
+    {
+      "code": "5000003",
+      "nom": "Café",
+      "prix_cents": 160,
+      "tva_bp": 550,
+      "categorie": "Boissons"
+    },
+    {
+      "code": "5000004",
+      "nom": "Thé glacé",
+      "prix_cents": 220,
+      "tva_bp": 550,
+      "categorie": "Boissons"
+    },
+    {
+      "code": "5000010",
+      "nom": "Baguette tradition",
+      "prix_cents": 125,
+      "tva_bp": 550,
+      "categorie": "Boulangerie"
+    },
+    {
+      "code": "5000011",
+      "nom": "Croissant",
+      "prix_cents": 135,
+      "tva_bp": 550,
+      "categorie": "Boulangerie"
+    },
+    {
+      "code": "5000012",
+      "nom": "Pain aux raisins",
+      "prix_cents": 150,
+      "tva_bp": 550,
+      "categorie": "Boulangerie"
+    },
+    {
+      "code": "5000013",
+      "nom": "Sandwich poulet",
+      "prix_cents": 490,
+      "tva_bp": 1000,
+      "categorie": "Boulangerie"
+    },
+    {
+      "code": "5000020",
+      "nom": "Pâtes 1 kg",
+      "prix_cents": 215,
+      "tva_bp": 550,
+      "categorie": "Épicerie"
+    },
+    {
+      "code": "5000021",
+      "nom": "Lentilles 500 g",
+      "prix_cents": 235,
+      "tva_bp": 550,
+      "categorie": "Épicerie"
+    },
+    {
+      "code": "5000022",
+      "nom": "Café moulu",
+      "prix_cents": 399,
+      "tva_bp": 550,
+      "categorie": "Épicerie"
+    },
+    {
+      "code": "5000030",
+      "nom": "Piles x4",
+      "prix_cents": 549,
+      "tva_bp": 2000,
+      "categorie": "Divers"
+    },
+    {
+      "code": "5000031",
+      "nom": "Magazine",
+      "prix_cents": 399,
+      "tva_bp": 210,
+      "categorie": "Divers"
+    }
+  ]
+}

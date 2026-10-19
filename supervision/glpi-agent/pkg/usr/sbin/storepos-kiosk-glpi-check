@@ -1,0 +1,55 @@
+#!/bin/bash
+#
+# storepos-kiosk-glpi-check : diagnostic de l'inventaire GLPI de cette caisse (réglages, agent, liaison avec le serveur).
+# Usage : sudo storepos-kiosk-glpi-check
+set -u
+CONF_DIR="${GLPI_CONF_DIR:-/etc/glpi-agent/conf.d}"
+CIBLE="$CONF_DIR/50-storepos-kiosk-serveur.cfg"
+KO=0; WARN=0
+ok()   { echo "  [ OK ] $*"; }
+ko()   { echo "  [ KO ] $*"; KO=1; }
+warn() { echo "  [ !! ] $*"; WARN=1; }
+valeur() { sed -n "s/^$1[[:space:]]*=[[:space:]]*//p" "$CIBLE" 2>/dev/null | head -1; }
+
+echo; echo "== Réglages =="
+if [ -f "$CIBLE" ]; then
+    URL=$(valeur server); USR=$(valeur user); PASS=$(valeur password); TAG=$(valeur tag)
+    echo "  serveur : $URL | utilisateur : ${USR:-?} | mot de passe : $([ -n "$PASS" ] && echo renseigné || echo ABSENT) | étiquette : ${TAG:-?}"
+    ok "caisse inscrite"
+    case "$URL" in https://*) ok "serveur en HTTPS" ;; http://localhost*|http://127.0.0.1*) warn "serveur en HTTP local (essai)" ;; *) ko "le serveur doit être en https://" ;; esac
+    [ -n "$USR" ] && [ -n "$PASS" ] || ko "identifiant ou mot de passe absent : relancer storepos-kiosk-glpi-enroll"
+    perms=$(stat -c %a "$CIBLE" 2>/dev/null); [ "$perms" = "600" ] && ok "fichier protégé (0600)" || warn "droits du fichier : $perms (0600 attendu : il contient un mot de passe)"
+else
+    ko "caisse non inscrite ($CIBLE absent) : sudo storepos-kiosk-glpi-enroll --help"
+    URL=""; USR=""; PASS=""
+fi
+
+echo; echo "== Agent GLPI =="
+if command -v glpi-agent >/dev/null 2>&1; then
+    ok "glpi-agent installé ($(glpi-agent --version 2>/dev/null | head -1))"
+else
+    ko "glpi-agent n'est pas installé"
+fi
+if [ "${STOREPOS_TEST:-0}" != "1" ]; then
+    systemctl is-active --quiet glpi-agent.service && ok "service glpi-agent actif" || ko "service glpi-agent arrêté (sudo systemctl start glpi-agent)"
+    if ss -ltn 2>/dev/null | grep -q ':62354 '; then ko "le port 62354 est ouvert : l'interface web de l'agent devrait être désactivée (no-httpd = 1)"; else ok "aucun port ouvert par l'agent (62354 fermé)"; fi
+fi
+
+echo; echo "== Liaison avec le serveur d'inventaire =="
+if [ -n "${URL:-}" ] && [ -n "${USR:-}" ]; then
+    code=$(curl -s -o /dev/null -m 15 -w '%{http_code}' -u "$USR:$PASS" -X POST -H 'Content-Type: application/json' --data '{}' "$URL" 2>/dev/null || true)
+    case "$code" in
+        000|'') ko "serveur injoignable (réseau, DNS ou certificat)" ;;
+        401|403) ko "serveur joint mais accès refusé (code $code) : identifiant ou mot de passe refusé" ;;
+        404) ko "serveur joint mais adresse introuvable (code 404) : vérifier le chemin (…/front/inventory.php)" ;;
+        5??) warn "serveur joint mais en erreur (code $code) : GLPI est-il démarré ?" ;;
+        *) ok "serveur joint, identifiants acceptés (code $code)" ;;
+    esac
+else
+    warn "liaison non testée (caisse non inscrite)"
+fi
+
+echo
+if [ "$KO" -ne 0 ]; then echo "Résultat : au moins un point KO."; exit 1
+elif [ "$WARN" -ne 0 ]; then echo "Résultat : correct, avec des remarques."
+else echo "Résultat : tout est OK."; fi

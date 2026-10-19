@@ -1,0 +1,32 @@
+#!/bin/sh
+# postinst de storepos-kiosk-glpi
+set -e
+
+case "$1" in
+    configure)
+        install -d -m 0755 /etc/glpi-agent/conf.d
+        # Les réglages du serveur contiennent un mot de passe : s'ils existent déjà, les protéger
+        if [ -f /etc/glpi-agent/conf.d/50-storepos-kiosk-serveur.cfg ]; then
+            chown root:root /etc/glpi-agent/conf.d/50-storepos-kiosk-serveur.cfg
+            chmod 0600 /etc/glpi-agent/conf.d/50-storepos-kiosk-serveur.cfg
+        fi
+        # Prendre en compte « no-httpd = 1 » tout de suite
+        if [ -d /run/systemd/system ]; then
+            systemctl try-restart glpi-agent.service >/dev/null 2>&1 || true
+        fi
+        echo
+        echo "=== Inventaire GLPI installé ==="
+        echo "1. Inscrire la caisse :  sudo storepos-kiosk-glpi-enroll --help"
+        echo "2. Vérifier :            sudo storepos-kiosk-glpi-check"
+    ;;
+
+    abort-upgrade|abort-remove|abort-deconfigure)
+    ;;
+
+    *)
+        echo "postinst called with unknown argument \`$1'" >&2
+        exit 1
+    ;;
+esac
+
+exit 0

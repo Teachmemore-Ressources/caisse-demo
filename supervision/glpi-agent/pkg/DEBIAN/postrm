@@ -1,0 +1,11 @@
+#!/bin/sh
+# postrm de storepos-kiosk-glpi
+set -e
+case "$1" in
+    remove|purge)
+        # Le mot de passe de l'inventaire ne doit pas rester sur la caisse
+        rm -f /etc/glpi-agent/conf.d/50-storepos-kiosk-serveur.cfg
+        if [ -d /run/systemd/system ]; then systemctl try-restart glpi-agent.service >/dev/null 2>&1 || true; fi
+    ;;
+esac
+exit 0

@@ -1,0 +1,25 @@
+# Tunnel Cloudflare pour une pile Prometheus / Loki / Grafana DÉJÀ en conteneurs.
+# Ajoute UN conteneur « cloudflared » : il ouvre une connexion SORTANTE vers Cloudflare, rien n'est ouvert sur votre réseau.
+# Il doit rejoindre le même réseau Docker que Prometheus, Loki et Grafana pour les joindre par leur nom.
+#
+# 1. Trouver le réseau :   docker inspect <nom du conteneur prometheus> --format '{{range $k,$v := .NetworkSettings.Networks}}{{$k}} {{end}}'
+# 2. Créer le tunnel dans Cloudflare (voir LISEZMOI.md) et copier son jeton dans .env :  TUNNEL_TOKEN=...
+# 3. Lancer :   docker compose -f docker-compose.cloudflared.yml --env-file .env up -d
+#
+# Les noms de domaine publics (grafana.…, metrics.…, logs.…) se règlent dans le tableau de bord Cloudflare, pas ici.
+name: tunnel-cloudflare
+
+services:
+  cloudflared:
+    image: cloudflare/cloudflared:latest      # figer une version précise en production (voir les versions publiées)
+    restart: unless-stopped
+    command: tunnel --no-autoupdate run
+    environment:
+      TUNNEL_TOKEN: ${TUNNEL_TOKEN:?définir TUNNEL_TOKEN dans .env}
+    networks: [reseau_supervision]
+    # aucun « ports: » : le conteneur n'écoute rien, il ne fait que sortir
+
+networks:
+  reseau_supervision:
+    external: true
+    name: ${RESEAU_DOCKER:?définir RESEAU_DOCKER dans .env (nom du réseau de Prometheus)}
