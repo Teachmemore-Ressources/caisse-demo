@@ -25,6 +25,10 @@ inhibit_rules:
   # Panne globale probable : on ne noie pas l'équipe sous des dizaines d'alertes « caisse muette ».
   - source_matchers: ['alertname="PanneGlobaleProbable"']
     target_matchers: ['alertname="CaisseMuette"']
+  # Panne d'une enseigne : idem, limitée aux caisses de cette enseigne.
+  - source_matchers: ['alertname="PanneEnseigne"']
+    target_matchers: ['alertname="CaisseMuette"']
+    equal: [enseigne]
   - source_matchers: ['alertname="CaisseMuette"']
     target_matchers: ['severity=~"warning|critical"']
     equal: [enseigne, magasin, poste]

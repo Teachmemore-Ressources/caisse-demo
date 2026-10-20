@@ -1,0 +1,5 @@
+/etc/default/storepos-kiosk
+/etc/lightdm/lightdm.conf.d/50-storepos-kiosk.conf
+/etc/logrotate.d/storepos-kiosk
+/etc/ssh/sshd_config.d/50-storepos-kiosk.conf
+/etc/X11/xorg.conf.d/10-storepos-kiosk.conf

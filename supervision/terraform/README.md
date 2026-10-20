@@ -1,6 +1,8 @@
 # Déploiement de la passerelle sur AWS avec Terraform
 
-Crée, dans votre compte AWS, la passerelle décrite dans `../serveur/GUIDE-SERVEUR.md` (Caddy, Prometheus, Loki, Alertmanager, Grafana).
+> Aide-mémoire de **toutes les commandes AWS** (session, tunnel Grafana, mise à jour, secrets, sauvegardes, coûts, dépannage) : [`../guides/AWS-COMMANDES.md`](../guides/AWS-COMMANDES.md).
+
+Crée, dans votre compte AWS, la passerelle décrite dans `../guides/GUIDE-SERVEUR.md` (Caddy, Prometheus, Loki, Alertmanager, Grafana).
 
 ```
 Internet ──443──► Elastic IP ──► EC2 Ubuntu 24.04 (t3.medium par défaut, essai) ── Docker : Caddy → Prometheus / Loki ; Grafana ; Alertmanager
@@ -23,7 +25,13 @@ administrateurs ──► AWS Systems Manager (pas de SSH, pas de VPN)       S3 
 Le dossier `../serveur` (fichiers Caddy, Prometheus, règles d'alerte, Grafana, scripts) est envoyé tel quel dans S3 puis récupéré par le serveur : **une seule source de vérité**.
 
 ## Option : inventaire GLPI
-`activer_glpi = true` + `domaine_glpi = "glpi.exemple.fr"` (et `instance_type = "t3.large"`) ajoutent GLPI et sa base MariaDB sur le même serveur : mots de passe générés et conservés chiffrés, enregistrement DNS (si Route 53), sauvegarde de la base. Interface de GLPI jamais publique (tunnel, port 8081). Procédure complète et limites : `../GUIDE-GLPI.md`.
+> **Serveur déjà créé ?** `terraform apply` génère les mots de passe et change la taille de l'instance, mais ne réécrit pas `/etc/passerelle.env` (écrit au premier démarrage) : y activer GLPI à la main, voir `../guides/GUIDE-GLPI.md` § 1 et `../guides/AWS-COMMANDES.md` § 7b.
+
+`activer_glpi = true` + `domaine_glpi = "glpi.exemple.fr"` (et `instance_type = "t3.large"`) ajoutent GLPI et sa base MariaDB sur le même serveur : mots de passe générés et conservés chiffrés, enregistrement DNS (si Route 53), sauvegarde de la base. Interface de GLPI jamais publique (tunnel, port 8081). Procédure complète et limites : `../guides/GUIDE-GLPI.md`.
+
+## Option : prise en main à distance (RustDesk)
+`activer_rustdesk = true` + `domaine_rustdesk = "rustdesk.exemple.fr"` ajoutent le serveur RustDesk (annuaire + relais) : ouvre 21115-21117/tcp et 21116/udp
+**sur le serveur** (rien chez le client), génère le secret d'où sont dérivés les mots de passe des caisses, sauvegarde la clé du serveur. Voir `../guides/GUIDE-RUSTDESK.md`.
 
 ## Prérequis
 - Terraform ≥ 1.6, AWS CLI v2 configuré (`aws sts get-caller-identity` répond), et le [plugin Session Manager](https://docs.aws.amazon.com/systems-manager/latest/userguide/session-manager-working-with-install-plugin.html) pour se connecter au serveur.
@@ -55,7 +63,7 @@ terraform apply
    Il affiche la commande d'enrôlement à lancer sur chaque caisse. Le mot de passe n'est conservé que sous forme d'empreinte, dans `caddy/enseignes.caddy` (sauvegardé dans S3 ; **jamais écrasé** par une synchronisation).
 4. **Grafana.**
    - Mode `prive` : `$(terraform output -raw tunnel_grafana)` puis <http://localhost:3000> ; compte `admin`, mot de passe : `$(terraform output -raw mot_de_passe_grafana)`.
-   - Mode `sso` : <https://grafana.exemple.fr>. Déclarez chez Google l'URI de redirection `https://<domaine_grafana>/login/google` et imposez la validation en deux étapes dans la console Google (voir GUIDE-SERVEUR.md § 8).
+   - Mode `sso` : <https://grafana.exemple.fr>. Déclarez chez Google l'URI de redirection `https://<domaine_grafana>/login/google` et imposez la validation en deux étapes dans la console Google (voir `../guides/GUIDE-SERVEUR.md` § 8).
 
 ## Mettre à jour la configuration (règles d'alerte, tableau de bord, Caddyfile…)
 
@@ -69,7 +77,7 @@ Modifier `files/bootstrap.sh` n'a **pas** d'effet sur un serveur existant (et ne
 ## Sauvegardes et restauration
 - Tous les jours, 03:30 UTC : archive locale (`/srv/data/sauvegardes`, 3 copies) puis copie dans `s3://<bucket_sauvegardes>/passerelle/` (conservation `retention_sauvegardes_jours`, 30 par défaut). En plus : instantané EBS quotidien du disque de données (7 jours).
 - **Une sauvegarde S3 contient `.env` et les empreintes des enseignes** : le bucket est privé et chiffré ; ne donnez l'accès qu'aux administrateurs.
-- Restauration : recréer l'infrastructure (`terraform apply`), puis suivre la restauration de `../serveur/GUIDE-SERVEUR.md` § 10 en téléchargeant l'archive avec `aws s3 cp`. Ou, pour un disque abîmé, créer un volume depuis un instantané EBS et l'attacher à la place du disque de données.
+- Restauration : recréer l'infrastructure (`terraform apply`), puis suivre la restauration de `../guides/GUIDE-SERVEUR.md` § 10 en téléchargeant l'archive avec `aws s3 cp`. Ou, pour un disque abîmé, créer un volume depuis un instantané EBS et l'attacher à la place du disque de données.
 
 ## Coûts approximatifs (région Paris, estimations non vérifiées sur la grille AWS)
 **Réglages par défaut = essai** (`t3.medium`, 30 Go, `environnement_test = true`) : environ 35-40 €/mois si le serveur reste allumé en continu (instance ≈ 35 €, disques ≈ 5 €, Elastic IP ≈ 3 €), soit moins de 2 €/jour ; S3 et Parameter Store sont négligeables. À comparer à votre crédit : le programme gratuit AWS donne des crédits limités dans le temps, vérifiez le solde dans *Billing*.

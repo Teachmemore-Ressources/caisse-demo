@@ -78,10 +78,16 @@ verif() {  # verif <description> <requête> <attendu> ; compare la valeur numér
     if [ "$v" = "$3" ]; then ok "$1 = $v"; else ko "$1 : attendu $3, obtenu $v"; fi
 }
 verif "tickets en attente (l'app en a laissé 2)"        'caisse_tickets_pending'                  2
-verif "tickets du jour (4 créés)"                        'caisse_tickets_today'                    4
-verif "catalogue : 25 produits"                          'caisse_catalog_products'                 25
 verif "mode autonome (-1)"                               'caisse_sync_state'                       -1
-verif "session caissier ouverte"                         'caisse_cashier_session'                  1
+# La supervision ne remonte que l'état de SANTÉ : l'activité commerciale des clients (tickets et ventes du jour, catalogue, session) est écartée par l'agent
+verif "activité commerciale NON envoyée : tickets du jour"  'count(caisse_tickets_today) or vector(0)'      0
+verif "activité commerciale NON envoyée : ventes du jour"   'count(caisse_sales_today_cents) or vector(0)'  0
+verif "activité commerciale NON envoyée : catalogue"        'count({__name__=~"caisse_catalog_.*"}) or vector(0)' 0
+verif "activité commerciale NON envoyée : session caissier" 'count(caisse_cashier_session) or vector(0)'    0
+verif "santé de l'application envoyée (dernière écriture)"  'count(caisse_app_last_write_timestamp_seconds{machine="abc123def456"})' 1
+verif "budget de séries par caisse (au plus 80)"            'count({machine="abc123def456"}) < bool 80' 1
+verif "disque : la partition système seulement"             'count(node_filesystem_avail_bytes{machine="abc123def456"})' 1
+verif "pas de trafic réseau ni de statistiques par disque"  'count({__name__=~"node_network_.*|node_disk_.*",machine="abc123def456"}) or vector(0)' 0
 verif "étiquette magasin posée par l'agent"              'count(caisse_tickets_pending{enseigne="demo",magasin="LYON-01",poste="2",machine="abc123def456"})' 1
 verif "agent joignable : up{job=\"caisse\"} = 1"         'up{job="caisse",magasin="LYON-01"}'      1
 verif "une seule caisse en ligne (requête du tableau)"   'count(up{job="caisse"} == 1)'            1
@@ -96,6 +102,21 @@ for i in $(seq 1 80); do
     n=$(q 'max(count_over_time(up{job="caisse"}[5m]))' 2>/dev/null | jq -r '.data.result[0].value[1] // "0"')
     [ "${n%.*}" -ge 2 ] 2>/dev/null && break; sleep 2
 done
+
+echo "  attente du précalcul de santé (règles d'enregistrement, jusqu'à 150 s)…"
+for i in $(seq 1 75); do
+    n=$(q 'count(caisse:cpu_percent)' 2>/dev/null | jq -r '.data.result[0].value[1] // "0"')
+    [ "$n" != "0" ] && break; sleep 2
+done
+for i in $(seq 1 40); do
+    n=$(q 'count(caisse:connue)' 2>/dev/null | jq -r '.data.result[0].value[1] // "0"')
+    [ "$n" != "0" ] && break; sleep 2
+done
+verif "inventaire : la caisse est connue (7 jours)"          'count(caisse:connue{machine="abc123def456"})'           1
+verif "règle d'enregistrement : processeur (%) de la caisse"  'count(caisse:cpu_percent{machine="abc123def456"})'      1
+verif "règle d'enregistrement : mémoire (%) de la caisse"     'count(caisse:memoire_percent{machine="abc123def456"})'  1
+verif "règle d'enregistrement : disque (%) de la caisse"      'count(caisse:disque_percent{machine="abc123def456"})'   1
+verif "précalcul cohérent : mémoire entre 0 et 100 %"         'caisse:memoire_percent{machine="abc123def456"} > bool 0 and caisse:memoire_percent{machine="abc123def456"} < bool 100' 1
 
 etape "6. Chaque requête du tableau de bord Grafana s'exécute sans erreur sur ces données"
 python3 -I - "$SUP/serveur/grafana/dashboards/parc-caisses.json" "$PROM_PORT" <<'EOF'
@@ -129,14 +150,16 @@ EOF
 verif "tableau : « Caisses en ligne »"                   'count(up{job="caisse", enseigne=~".*", magasin=~".*"} == 1) or vector(0)' 1
 verif "tableau : « Tickets en attente »"                 'sum(caisse_tickets_pending{enseigne=~".*", magasin=~".*"}) or vector(0)' 2
 verif "tableau : « Versions de l'application »"          'count(count by (version) (caisse_app_info{enseigne=~".*", magasin=~".*"}))' 1
-verif "tableau : « Caisses à surveiller »"               'count(caisse_tickets_pending{enseigne=~".*", magasin=~".*"} > 0)' 1
+verif "tableau : « les 15 pires » (processeur)"          'count(topk(15, caisse:cpu_percent{enseigne=~".*", magasin=~".*"}))' 1
+verif "tableau : situation par enseigne"                 'count(count by (enseigne) (up{job="caisse", enseigne=~".*", magasin=~".*"} == 1))' 1
+verif "tableau : centiles du parc (mémoire)"             'count(quantile(0.95, caisse:memoire_percent{enseigne=~".*", magasin=~".*"}))' 1
 verif "tableau : variable « Machine »"                   'count(count by (machine) (up{job="caisse", enseigne=~".*", magasin=~".*"}))' 1
-verif "tableau : processeur"                             'count(100 * (1 - avg by (machine) (rate(node_cpu_seconds_total{mode="idle", machine=~".*"}[5m]))))' 1
+verif "tableau : détail d'une caisse (processeur)"       'count(caisse:cpu_percent{machine=~".*"})' 1
 
 etape "7. Les règles d'alerte sont chargées et saines dans Prometheus"
 sleep 5
 curl -fsS "http://127.0.0.1:$PROM_PORT/api/v1/rules" | jq -r '[.data.groups[].rules[] | select(.health!="ok")] | length' | { read n; [ "$n" = "0" ] && ok "toutes les règles chargées, aucune en erreur" || ko "$n règle(s) en erreur"; }
-nr=$(curl -fsS "http://127.0.0.1:$PROM_PORT/api/v1/rules" | jq -r '[.data.groups[].rules[]] | length'); [ "$nr" = "14" ] && ok "nombre de règles : $nr" || ko "nombre de règles : $nr (attendu 14)"
+nr=$(curl -fsS "http://127.0.0.1:$PROM_PORT/api/v1/rules" | jq -r '[.data.groups[].rules[]] | length'); [ "$nr" = "24" ] && ok "nombre de règles : $nr (17 alertes + 7 règles d'enregistrement)" || ko "nombre de règles : $nr (attendu 24)"
 curl -fsS "http://127.0.0.1:$PROM_PORT/api/v1/alerts" | jq -r '.data.alerts[] | "  alerte en cours : \(.labels.alertname) (\(.state))"'
 
 # ---------------------------------------------------------------------------------------------------------
@@ -189,8 +212,8 @@ if [ ! -x "$G/bin/grafana" ]; then echo "  Grafana non installé : étape ignor�
             [ "$n" = "3" ] && [ "$d" != "0" ] && break; sleep 2
         done
         n=$($GA/api/datasources | jq -r 'length'); [ "$n" = "3" ] && ok "3 sources de données provisionnées (Prometheus, Loki, Alertmanager)" || ko "sources de données : $n"
-        $GA/api/search?query=Parc | jq -r '.[0].title' | grep -q "Parc de caisses" && ok "tableau de bord « Parc de caisses » provisionné" || ko "tableau de bord introuvable"
-        np=$($GA/api/dashboards/uid/parc-caisses | jq -r '.dashboard.panels | length'); [ "$np" = "21" ] && ok "tableau de bord chargé par Grafana : $np panneaux" || ko "panneaux : $np"
+        $GA/api/search?query=Parc | jq -r '.[0].title' | grep -q "Santé du parc de caisses" && ok "tableau de bord « Santé du parc de caisses » provisionné" || ko "tableau de bord introuvable"
+        np=$($GA/api/dashboards/uid/parc-caisses | jq -r '.dashboard.panels | length'); [ "$np" = "34" ] && ok "tableau de bord chargé par Grafana : $np panneaux" || ko "panneaux : $np"
         # requête réelle à travers Grafana vers Prometheus (source « prom »)
         rep=$($GA/api/ds/query -H 'Content-Type: application/json' -d '{"queries":[{"refId":"A","datasource":{"uid":"prom","type":"prometheus"},"expr":"sum(caisse_tickets_pending{magasin=\"LYON-01\"})","instant":true}],"from":"now-5m","to":"now"}' | jq -r '.results.A.frames[0].data.values[1][0]')
         [ "$rep" = "2" ] && ok "requête à travers Grafana : tickets en attente = $rep" || ko "requête via Grafana : $rep"

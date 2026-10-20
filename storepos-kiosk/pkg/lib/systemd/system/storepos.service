@@ -1,0 +1,23 @@
+[Unit]
+Description=Application de caisse StorePOS (kiosque)
+After=lightdm.service
+Requires=lightdm.service
+# Ne jamais abandonner les relances : une caisse doit toujours revenir
+StartLimitIntervalSec=0
+
+[Service]
+Type=simple
+User=caissepos
+Group=caissepos
+EnvironmentFile=-/etc/default/storepos-kiosk
+Environment=HOME=/home/caissepos
+Environment=XAUTHORITY=/home/caissepos/.Xauthority
+# L'écran X (:0, :1, :2...) est détecté par le script de lancement
+ExecStart=/usr/lib/storepos-kiosk/launch-fullscreen.sh
+# always : relance aussi si l'application se ferme proprement (code 0)
+Restart=always
+RestartSec=3
+TimeoutStopSec=15
+
+[Install]
+WantedBy=graphical.target

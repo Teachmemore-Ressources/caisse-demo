@@ -1,0 +1,142 @@
+#!/usr/bin/env python3
+"""Bouton « i » tactile pour la caisse kiosque.
+
+Petit bouton dans un coin de l'écran. Un appui MAINTENU (INFO_HOLD_SECONDS, 2 s par défaut)
+ouvre une fenêtre avec les informations de la caisse (storepos-kiosk-info). Un appui bref ne
+fait rien, pour qu'un client ne l'ouvre pas par erreur.
+
+Réglages dans /etc/default/storepos-kiosk :
+  INFO_BUTTON_ENABLED=yes|no          (s'applique aussi au bouton dessiné par l'application)
+  INFO_BUTTON_MODE=auto|tk            (auto : ce bouton s'efface si caisse-demo >= 1.3.3 dessine le sien)
+  INFO_BUTTON_POS=bottom-right|bottom-left|top-right|top-left
+  INFO_HOLD_SECONDS=2
+"""
+import subprocess
+import sys
+import tkinter as tk
+
+CONFIG = "/etc/default/storepos-kiosk"
+INFO_CMD = "storepos-kiosk-info"
+AUTO_CLOSE_MS = 60_000   # la fenêtre d'infos se ferme seule
+RAISE_EVERY_MS = 1500    # remet le bouton au premier plan (l'appli plein écran peut le recouvrir)
+
+
+def read_config():
+    cfg = {}
+    try:
+        with open(CONFIG, encoding="utf-8") as f:
+            for line in f:
+                line = line.strip()
+                if not line or line.startswith("#") or "=" not in line:
+                    continue
+                key, _, value = line.partition("=")
+                cfg[key.strip()] = value.strip().strip('"').strip("'")
+    except OSError:
+        pass
+    return cfg
+
+
+def get_info():
+    try:
+        out = subprocess.run([INFO_CMD], capture_output=True, text=True, timeout=15)
+        return out.stdout.strip() or "Aucune information disponible."
+    except (OSError, subprocess.SubprocessError) as exc:
+        return f"Impossible d'obtenir les informations : {exc}"
+
+
+def app_draws_own_button(cfg):
+    """caisse-demo 1.3.3 et plus dessine lui-même son bouton « i » (rond, translucide, dans l'application) : on évite un doublon.
+    INFO_BUTTON_MODE=tk force ce bouton-ci ; auto (défaut) le retire quand l'application a le sien."""
+    if cfg.get("INFO_BUTTON_MODE", "auto").lower() != "auto":
+        return False
+    try:
+        version = subprocess.run(["dpkg-query", "-W", "-f=${Version}", "caisse-demo"], capture_output=True, text=True, timeout=5).stdout.strip()
+        if not version:
+            return False
+        return subprocess.run(["dpkg", "--compare-versions", version, "ge", "1.3.3"], timeout=5).returncode == 0
+    except (OSError, subprocess.SubprocessError):
+        return False
+
+
+def main():
+    cfg = read_config()
+    if cfg.get("INFO_BUTTON_ENABLED", "yes").lower() not in ("yes", "true", "1"):
+        return 0
+    if app_draws_own_button(cfg):
+        return 0
+    pos = cfg.get("INFO_BUTTON_POS", "bottom-right")
+    try:
+        hold_ms = int(float(cfg.get("INFO_HOLD_SECONDS", "2")) * 1000)
+    except ValueError:
+        hold_ms = 2000
+
+    root = tk.Tk()
+    root.withdraw()
+    sw, sh = root.winfo_screenwidth(), root.winfo_screenheight()
+
+    size = max(48, sh // 14)          # bouton assez grand pour un doigt
+    margin = 6
+    x = sw - size - margin if "right" in pos else margin
+    y = sh - size - margin if "bottom" in pos else margin
+
+    button = tk.Toplevel(root)
+    button.overrideredirect(True)
+    button.geometry(f"{size}x{size}+{x}+{y}")
+    button.configure(bg="#444444")
+    label = tk.Label(button, text="i", fg="#cccccc", bg="#444444", font=("DejaVu Sans", size // 2, "bold"))
+    label.pack(fill="both", expand=True)
+
+    state = {"timer": None, "dialog": None}
+
+    def close_dialog(_event=None):
+        if state["dialog"] is not None:
+            state["dialog"].destroy()
+            state["dialog"] = None
+
+    def show_info():
+        state["timer"] = None
+        close_dialog()
+        width, height = min(sw - 40, 900), min(sh - 40, 520)
+        dlg = tk.Toplevel(root)
+        dlg.overrideredirect(True)
+        dlg.geometry(f"{width}x{height}+{(sw - width) // 2}+{(sh - height) // 2}")
+        dlg.configure(bg="#1e1e1e", highlightthickness=3, highlightbackground="#888888")
+        tk.Label(dlg, text="Informations de la caisse", fg="white", bg="#1e1e1e",
+                 font=("DejaVu Sans", max(14, sh // 40), "bold")).pack(pady=(14, 6))
+        tk.Label(dlg, text=get_info(), fg="white", bg="#1e1e1e", justify="left",
+                 font=("DejaVu Sans Mono", max(11, sh // 55))).pack(padx=24, pady=6, anchor="w")
+        tk.Button(dlg, text="Fermer", command=close_dialog, font=("DejaVu Sans", max(14, sh // 40), "bold"),
+                  height=2).pack(side="bottom", fill="x", padx=24, pady=16)
+        state["dialog"] = dlg
+        dlg.after(AUTO_CLOSE_MS, close_dialog)
+
+    def on_press(_event):
+        if state["timer"] is None:
+            label.configure(bg="#2a7fff")
+            button.configure(bg="#2a7fff")
+            state["timer"] = root.after(hold_ms, show_info)
+
+    def on_release(_event):
+        label.configure(bg="#444444")
+        button.configure(bg="#444444")
+        if state["timer"] is not None:
+            root.after_cancel(state["timer"])
+            state["timer"] = None
+
+    for widget in (button, label):
+        widget.bind("<ButtonPress-1>", on_press)
+        widget.bind("<ButtonRelease-1>", on_release)
+
+    def keep_on_top():
+        button.lift()
+        if state["dialog"] is not None:
+            state["dialog"].lift()
+        root.after(RAISE_EVERY_MS, keep_on_top)
+
+    keep_on_top()
+    root.mainloop()
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

@@ -22,7 +22,7 @@ groups:
       - alert: CaisseMuette
         expr: |
           (
-            count by (enseigne, magasin, poste, machine) (last_over_time(up{job="caisse"}[24h]))
+            count by (enseigne, magasin, poste, machine) (caisse:connue)
             unless
             count by (enseigne, magasin, poste, machine) (up{job="caisse"})
           )
@@ -40,14 +40,14 @@ groups:
         expr: |
           (
             count(
-              count by (machine) (last_over_time(up{job="caisse"}[24h]))
+              count by (machine) (caisse:connue)
               unless
               count by (machine) (up{job="caisse"})
             )
             /
-            count(count by (machine) (last_over_time(up{job="caisse"}[24h])))
+            count(count by (machine) (caisse:connue))
           ) > 0.3
-          and on() (count(count by (machine) (last_over_time(up{job="caisse"}[24h]))) >= 5)
+          and on() (count(count by (machine) (caisse:connue)) >= 5)
           and on() (hour() >= 6 and hour() < 19)
         for: 10m
         labels:
@@ -55,6 +55,28 @@ groups:
         annotations:
           summary: "Plus de 30 % des caisses ne répondent plus : panne probable du serveur de réception"
           description: "Vérifier dans l'ordre : le serveur de réception et ses conteneurs (Caddy, Prometheus), le certificat HTTPS et le nom de domaine, puis l'identifiant partagé des caisses (changé ou révoqué par erreur)."
+
+      # Plusieurs caisses d'UNE MÊME enseigne muettes en même temps : plutôt un problème chez ce client (accès Internet commun, identifiant
+      # de l'enseigne) que 30 pannes isolées. Remplace les alertes individuelles de cette enseigne (voir Alertmanager).
+      - alert: PanneEnseigne
+        expr: |
+          (
+            count by (enseigne) (
+              count by (enseigne, machine) (caisse:connue)
+              unless
+              count by (enseigne, machine) (up{job="caisse"})
+            )
+            /
+            count by (enseigne) (count by (enseigne, machine) (caisse:connue))
+          ) > 0.3
+          and on(enseigne) (count by (enseigne) (count by (enseigne, machine) (caisse:connue)) >= 5)
+          and on() (hour() >= 6 and hour() < 19)
+        for: 10m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Plus de 30 % des caisses de {{ $labels.enseigne }} ne répondent plus"
+          description: "Plusieurs caisses de {{ $labels.enseigne }} sont muettes en même temps en heures d'ouverture : vérifier côté client (accès Internet, box), ou l'identifiant de l'enseigne s'il a été changé ou révoqué."
 
       # L'agent répond mais l'application n'écrit plus ses mesures : application arrêtée, plantée ou figée.
       - alert: ApplicationFigee
@@ -145,6 +167,26 @@ groups:
         annotations:
           summary: "Température élevée : {{ $labels.magasin }} poste {{ $labels.poste }}"
           description: "Une sonde dépasse 85 °C depuis 10 minutes."
+
+      # Processeur saturé longtemps : une caisse qui rame (application emballée, processus parasite).
+      - alert: ProcesseurSature
+        expr: caisse:cpu_percent > 95
+        for: 15m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Processeur saturé : {{ $labels.magasin }} poste {{ $labels.poste }}"
+          description: "Plus de 95 % du processeur utilisé depuis 15 minutes ({{ $value | printf \"%.0f\" }} %)."
+
+      # Le disque peine (carte SD ou disque en fin de vie, journal qui gonfle) : le processeur attend le disque.
+      - alert: DisqueLent
+        expr: caisse:iowait_percent > 40
+        for: 15m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Disque lent : {{ $labels.magasin }} poste {{ $labels.poste }}"
+          description: "Le processeur attend le disque {{ $value | printf \"%.0f\" }} % du temps depuis 15 minutes : disque défaillant ou saturé."
 
       - alert: RedemarrageRequis
         expr: kiosk_reboot_required == 1

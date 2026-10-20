@@ -1,0 +1,77 @@
+#!/bin/bash
+#
+# storepos-kiosk-check : diagnostic d'une caisse kiosque (lecture seule).
+# Usage : sudo storepos-kiosk-check
+# Code de sortie : 0 si aucun point bloquant, 1 sinon.
+
+KIOSK_USER="caissepos"
+APP_BIN=""
+for c in /opt/com.aemsofts.storepos/bin/com.aemsofts.storepos /opt/caisse-demo/bin/caisse-demo; do
+    [ -x "$c" ] && APP_BIN="$c" && break
+done
+FAIL=0
+
+ok()   { printf '  [ OK ] %s\n' "$*"; }
+ko()   { printf '  [ KO ] %s\n' "$*"; FAIL=1; }
+warn() { printf '  [ !! ] %s\n' "$*"; }
+section() { printf '\n== %s ==\n' "$*"; }
+
+section "Application"
+[ -x "$APP_BIN" ] && ok "binaire présent ($APP_BIN)" || ko "binaire introuvable : $APP_BIN"
+dpkg-query -W -f='  version : ${Version}\n' com.aemsofts.storepos 2>/dev/null \
+    || dpkg-query -W -f='  version : ${Version} (caisse-demo)\n' caisse-demo 2>/dev/null || true
+
+section "Utilisateur kiosque"
+if id "$KIOSK_USER" >/dev/null 2>&1; then
+    ok "utilisateur $KIOSK_USER présent"
+    for g in plugdev dialout; do
+        if id -nG "$KIOSK_USER" | tr ' ' '\n' | grep -qx "$g"; then ok "groupe $g"; else ko "$KIOSK_USER n'est pas dans le groupe $g"; fi
+    done
+else
+    ko "utilisateur $KIOSK_USER absent"
+fi
+
+section "Session graphique et service"
+systemctl is-active --quiet lightdm && ok "lightdm actif" || ko "lightdm inactif"
+[ "$(systemctl get-default 2>/dev/null)" = "graphical.target" ] && ok "cible par défaut : graphical.target" || ko "cible par défaut différente de graphical.target"
+systemctl is-enabled --quiet storepos.service && ok "storepos.service activé au démarrage" || ko "storepos.service non activé"
+if systemctl is-active --quiet storepos.service; then
+    ok "storepos.service actif"
+else
+    warn "storepos.service inactif (mode maintenance ? voir storepos-kiosk-maintenance status)"
+fi
+printf '  redémarrages depuis le boot : %s\n' "$(systemctl show -p NRestarts --value storepos.service 2>/dev/null)"
+XENV="XAUTHORITY=/home/$KIOSK_USER/.Xauthority"
+DISP=""
+for s in /tmp/.X11-unix/X*; do
+    [ -S "$s" ] || continue
+    d=":${s##*/X}"
+    if runuser -u "$KIOSK_USER" -- env DISPLAY="$d" "$XENV" xset q >/dev/null 2>&1; then DISP="$d"; break; fi
+done
+if [ -n "$DISP" ]; then
+    ok "écran $DISP joignable par $KIOSK_USER"
+    runuser -u "$KIOSK_USER" -- env DISPLAY="$DISP" "$XENV" wmctrl -l 2>/dev/null | sed 's/^/  fenêtre : /'
+else
+    warn "aucun écran X joignable par $KIOSK_USER (session pas encore ouverte ?) - sockets : $(ls /tmp/.X11-unix 2>/dev/null | tr '\n' ' ')"
+fi
+
+section "Périphériques"
+[ -f /opt/Datalogic/JavaPOS.jar ] && ok "SDK Datalogic (/opt/Datalogic)" || warn "SDK Datalogic absent (scanner)"
+[ -f /opt/EpsonJavaPOS/lib/epsonjpos.jar ] && ok "SDK Epson (/opt/EpsonJavaPOS)" || warn "SDK Epson absent (imprimante)"
+for f in /etc/storepos/javapos/jpos.xml /etc/storepos/imprimante.properties /etc/storepos/balance.properties; do
+    [ -f "$f" ] && ok "$f" || warn "$f absent"
+done
+lsusb 2>/dev/null | grep -iE '05f9|04b8' | sed 's/^/  USB : /' || warn "aucun périphérique Datalogic (05f9) / Epson (04b8) détecté en USB"
+ls /dev/ttyUSB* /dev/ttyS0 2>/dev/null | sed 's/^/  série : /'
+
+section "Sécurité"
+if sshd -T 2>/dev/null | grep -qi "^denyusers.*$KIOSK_USER"; then ok "SSH refusé pour $KIOSK_USER"; else warn "SSH non refusé pour $KIOSK_USER (reload ssh ?)"; fi
+sshd -T 2>/dev/null | grep -qi '^passwordauthentication no' && ok "SSH : mot de passe désactivé" || warn "SSH : authentification par mot de passe encore active"
+sshd -T 2>/dev/null | grep -qi '^permitrootlogin no' && ok "SSH : root interdit" || warn "SSH : connexion root non interdite"
+
+section "Dernières lignes du log"
+tail -n 5 /var/log/storepos-kiosk.log 2>/dev/null || echo "  (pas de log)"
+
+echo
+if [ "$FAIL" -eq 0 ]; then echo "Résultat : aucun point bloquant."; else echo "Résultat : au moins un point KO."; fi
+exit "$FAIL"

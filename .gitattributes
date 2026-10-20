@@ -1,1 +1,7 @@
 *.deb filter=lfs diff=lfs merge=lfs -text
+# Fins de ligne : toujours LF dans le dépôt (les scripts échouent avec du CRLF)
+* text=auto eol=lf
+*.png binary
+*.jpg binary
+*.ttf binary
+*.zip binary

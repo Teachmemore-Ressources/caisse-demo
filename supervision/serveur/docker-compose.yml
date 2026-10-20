@@ -1,5 +1,5 @@
 # Passerelle de supervision des caisses : Caddy (entrée HTTPS) + Prometheus + Loki + Alertmanager + Grafana.
-# Voir GUIDE-SERVEUR.md. Usage :  cp .env.example .env  (à compléter)  puis  docker compose up -d
+# Voir ../guides/GUIDE-SERVEUR.md. Usage :  cp .env.example .env  (à compléter)  puis  docker compose up -d
 #
 # Les caisses ENVOIENT (remote_write / push) ; rien ne les contacte. Seuls les ports 80 et 443 sont publiés
 # (80 sert au certificat Let's Encrypt et à la redirection vers HTTPS).
@@ -48,7 +48,7 @@ services:
     command: [--config.file=/etc/alertmanager/alertmanager.yml, --storage.path=/alertmanager]
     volumes:
       - ./alertmanager/alertmanager.yml:/etc/alertmanager/alertmanager.yml:ro
-      - alertmanager_data:/alertmanager
+      - alertmanager_data:/alertmanage
     expose: ["9093"]
 
   loki:

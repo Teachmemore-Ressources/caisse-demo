@@ -1,0 +1,42 @@
+# Règles d'ENREGISTREMENT : le serveur calcule UNE FOIS par minute l'état de santé de chaque caisse (processeur, mémoire, disque, température).
+# Les tableaux de bord et les alertes lisent ces séries toutes prêtes au lieu de refaire des calculs sur des dizaines de milliers de séries
+# brutes à chaque affichage : c'est ce qui garde les écrans rapides à 6000 caisses.
+# Chaque règle produit une série par caisse (étiquettes enseigne, magasin, poste, machine).
+groups:
+  - name: sante_caisses
+    interval: 1m
+    rules:
+      # Utilisation du processeur (%) : 100 - part de temps « idle », moyenne des cœurs, sur 5 minutes
+      - record: caisse:cpu_percent
+        expr: 100 * (1 - avg by (enseigne, magasin, poste, machine) (rate(node_cpu_seconds_total{job="caisse", mode="idle"}[5m])))
+
+      # Attente disque (%) : temps passé à attendre le disque (carte SD ou disque qui peine)
+      - record: caisse:iowait_percent
+        expr: 100 * avg by (enseigne, magasin, poste, machine) (rate(node_cpu_seconds_total{job="caisse", mode="iowait"}[5m]))
+
+      # Mémoire utilisée (%) : ce qui n'est pas « disponible » (le cache disque n'est pas compté comme utilisé)
+      - record: caisse:memoire_percent
+        expr: max by (enseigne, magasin, poste, machine) (100 * (1 - node_memory_MemAvailable_bytes{job="caisse"} / node_memory_MemTotal_bytes{job="caisse"}))
+
+      # Disque système « / » utilisé (%)
+      - record: caisse:disque_percent
+        expr: max by (enseigne, magasin, poste, machine) (100 * (1 - node_filesystem_avail_bytes{job="caisse", mountpoint="/"} / node_filesystem_size_bytes{job="caisse", mountpoint="/"}))
+
+      # Température la plus élevée relevée (°C)
+      - record: caisse:temperature_max_celsius
+        expr: max by (enseigne, magasin, poste, machine) (node_hwmon_temp_celsius{job="caisse"})
+
+      # Durée depuis le dernier démarrage de la machine (secondes)
+      - record: caisse:uptime_seconds
+        expr: max by (enseigne, magasin, poste, machine) (node_time_seconds{job="caisse"} - node_boot_time_seconds{job="caisse"})
+
+  # Inventaire des caisses CONNUES : toute caisse qui a envoyé au moins une mesure ces 7 derniers jours (une série par caisse, valeur 1).
+  # Les alertes « caisse muette » et les écrans comparent cet inventaire aux caisses qui envoient en ce moment.
+  # 7 jours et non 24 h : un magasin fermé le dimanche ne doit pas « faire oublier » une caisse tombée en panne le samedi soir.
+  # Calculé UNE fois par minute ici, plutôt que dans chaque alerte et chaque panneau (lecture de 7 jours de données pour toutes les caisses).
+  # Une caisse retirée du parc reste « muette » jusqu'à 7 jours : la masquer par un silence Alertmanager (voir guides/GUIDE-SERVEUR.md).
+  - name: inventaire_caisses
+    interval: 1m
+    rules:
+      - record: caisse:connue
+        expr: max by (enseigne, magasin, poste, machine) (last_over_time(up{job="caisse"}[7d]))

@@ -1,13 +1,14 @@
 {
   "uid": "parc-caisses",
-  "title": "Parc de caisses",
+  "title": "Santé du parc de caisses",
   "tags": [
     "caisses",
-    "supervision"
+    "supervision",
+    "santé"
   ],
   "timezone": "browser",
   "schemaVersion": 39,
-  "version": 1,
+  "version": 2,
   "editable": true,
   "graphTooltip": 1,
   "time": {
@@ -75,7 +76,7 @@
       },
       {
         "name": "machine",
-        "label": "Machine",
+        "label": "Machine (détail)",
         "type": "query",
         "datasource": {
           "type": "prometheus",
@@ -88,18 +89,8 @@
         "definition": "label_values(up{job=\"caisse\", enseigne=~\"$enseigne\", magasin=~\"$magasin\"}, machine)",
         "refresh": 2,
         "sort": 1,
-        "multi": true,
-        "includeAll": true,
-        "allValue": ".*",
-        "current": {
-          "selected": true,
-          "text": [
-            "All"
-          ],
-          "value": [
-            "$__all"
-          ]
-        }
+        "multi": false,
+        "includeAll": false
       }
     ]
   },
@@ -110,7 +101,7 @@
     {
       "id": 1,
       "type": "row",
-      "title": "Vue d'ensemble du parc",
+      "title": "Santé du parc en un coup d'œil",
       "collapsed": false,
       "gridPos": {
         "x": 0,
@@ -186,8 +177,8 @@
     {
       "id": 3,
       "type": "stat",
-      "title": "Caisses muettes (24 h)",
-      "description": "Caisses vues dans les dernières 24 h mais silencieuses depuis plus de 5 minutes.",
+      "title": "Caisses muettes",
+      "description": "Caisses vues dans les dernières 24 h mais silencieuses depuis plus de 5 minutes (éteintes, réseau coupé, agent arrêté).",
       "datasource": {
         "type": "prometheus",
         "uid": "prom"
@@ -204,7 +195,7 @@
             "type": "prometheus",
             "uid": "prom"
           },
-          "expr": "(count(last_over_time(up{job=\"caisse\", enseigne=~\"$enseigne\", magasin=~\"$magasin\"}[24h])) - count(up{job=\"caisse\", enseigne=~\"$enseigne\", magasin=~\"$magasin\"})) or vector(0)",
+          "expr": "(count(caisse:connue{enseigne=~\"$enseigne\", magasin=~\"$magasin\"}) - count(up{job=\"caisse\", enseigne=~\"$enseigne\", magasin=~\"$magasin\"})) or vector(0)",
           "legendFormat": "",
           "refId": "A",
           "instant": true,
@@ -249,14 +240,140 @@
     {
       "id": 4,
       "type": "stat",
-      "title": "Hors ligne (serveur SaaS)",
-      "description": "Caisses qui vendent mais ne joignent plus le serveur.",
+      "title": "Ressources > 90 %",
+      "description": "Caisses dont le processeur, la mémoire ou le disque dépasse 90 %.",
       "datasource": {
         "type": "prometheus",
         "uid": "prom"
       },
       "gridPos": {
         "x": 8,
+        "y": 1,
+        "w": 4,
+        "h": 4
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prom"
+          },
+          "expr": "count(max by (machine) (caisse:cpu_percent{enseigne=~\"$enseigne\", magasin=~\"$magasin\"} > 90) or max by (machine) (caisse:memoire_percent{enseigne=~\"$enseigne\", magasin=~\"$magasin\"} > 90) or max by (machine) (caisse:disque_percent{enseigne=~\"$enseigne\", magasin=~\"$magasin\"} > 90)) or vector(0)",
+          "legendFormat": "",
+          "refId": "A",
+          "instant": true,
+          "range": false
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "none",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "orange",
+                "value": 1
+              }
+            ]
+          },
+          "color": {
+            "mode": "thresholds"
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "background",
+        "graphMode": "none",
+        "textMode": "value"
+      }
+    },
+    {
+      "id": 5,
+      "type": "stat",
+      "title": "App arrêtée / figée",
+      "description": "Le service de caisse est arrêté, ou l'application n'actualise plus ses mesures depuis plus de 3 minutes.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prom"
+      },
+      "gridPos": {
+        "x": 12,
+        "y": 1,
+        "w": 4,
+        "h": 4
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prom"
+          },
+          "expr": "count(max by (machine) (node_systemd_unit_state{name=\"storepos.service\", state=\"active\", enseigne=~\"$enseigne\", magasin=~\"$magasin\"} == 0) or max by (machine) (time() - caisse_app_last_write_timestamp_seconds{enseigne=~\"$enseigne\", magasin=~\"$magasin\"} > 180)) or vector(0)",
+          "legendFormat": "",
+          "refId": "A",
+          "instant": true,
+          "range": false
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "none",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 1
+              }
+            ]
+          },
+          "color": {
+            "mode": "thresholds"
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "background",
+        "graphMode": "none",
+        "textMode": "value"
+      }
+    },
+    {
+      "id": 6,
+      "type": "stat",
+      "title": "Hors ligne SaaS",
+      "description": "Caisses qui vendent mais ne joignent plus le serveur.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prom"
+      },
+      "gridPos": {
+        "x": 16,
         "y": 1,
         "w": 4,
         "h": 4
@@ -310,16 +427,16 @@
       }
     },
     {
-      "id": 5,
+      "id": 7,
       "type": "stat",
       "title": "Tickets en attente",
-      "description": "Tickets enregistrés localement, pas encore acquittés par le serveur.",
+      "description": "Tickets enregistrés localement, pas encore acquittés par le serveur : un risque de perte si la caisse tombe.",
       "datasource": {
         "type": "prometheus",
         "uid": "prom"
       },
       "gridPos": {
-        "x": 12,
+        "x": 20,
         "y": 1,
         "w": 4,
         "h": 4
@@ -377,19 +494,32 @@
       }
     },
     {
-      "id": 6,
-      "type": "stat",
-      "title": "Tickets du jour",
-      "description": "",
+      "id": 8,
+      "type": "row",
+      "title": "Par enseigne",
+      "collapsed": false,
+      "gridPos": {
+        "x": 0,
+        "y": 5,
+        "w": 24,
+        "h": 1
+      },
+      "panels": []
+    },
+    {
+      "id": 9,
+      "type": "table",
+      "title": "Situation de chaque enseigne",
       "datasource": {
         "type": "prometheus",
         "uid": "prom"
       },
+      "description": "Une ligne par client : combien de caisses, combien en ligne, muettes, en alerte de ressources, hors ligne du serveur.",
       "gridPos": {
-        "x": 16,
-        "y": 1,
-        "w": 4,
-        "h": 4
+        "x": 0,
+        "y": 6,
+        "w": 18,
+        "h": 9
       },
       "targets": [
         {
@@ -397,106 +527,195 @@
             "type": "prometheus",
             "uid": "prom"
           },
-          "expr": "sum(caisse_tickets_today{enseigne=~\"$enseigne\", magasin=~\"$magasin\"}) or vector(0)",
+          "expr": "count by (enseigne) (up{job=\"caisse\", enseigne=~\"$enseigne\", magasin=~\"$magasin\"} == 1)",
           "legendFormat": "",
           "refId": "A",
           "instant": true,
-          "range": false
+          "range": false,
+          "format": "table"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prom"
+          },
+          "expr": "count by (enseigne) (count by (enseigne, machine) (caisse:connue{enseigne=~\"$enseigne\", magasin=~\"$magasin\"}))",
+          "legendFormat": "",
+          "refId": "B",
+          "instant": true,
+          "range": false,
+          "format": "table"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prom"
+          },
+          "expr": "count by (enseigne) (max by (enseigne, machine) (caisse:cpu_percent{enseigne=~\"$enseigne\", magasin=~\"$magasin\"} > 90) or max by (enseigne, machine) (caisse:memoire_percent{enseigne=~\"$enseigne\", magasin=~\"$magasin\"} > 90) or max by (enseigne, machine) (caisse:disque_percent{enseigne=~\"$enseigne\", magasin=~\"$magasin\"} > 90))",
+          "legendFormat": "",
+          "refId": "C",
+          "instant": true,
+          "range": false,
+          "format": "table"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prom"
+          },
+          "expr": "count by (enseigne) (caisse_sync_state{enseigne=~\"$enseigne\", magasin=~\"$magasin\"} == 0)",
+          "legendFormat": "",
+          "refId": "D",
+          "instant": true,
+          "range": false,
+          "format": "table"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prom"
+          },
+          "expr": "sum by (enseigne) (caisse_tickets_pending{enseigne=~\"$enseigne\", magasin=~\"$magasin\"})",
+          "legendFormat": "",
+          "refId": "E",
+          "instant": true,
+          "range": false,
+          "format": "table"
         }
       ],
       "fieldConfig": {
         "defaults": {
-          "unit": "none",
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "green",
-                "value": null
-              }
-            ]
-          },
-          "color": {
-            "mode": "thresholds"
+          "custom": {
+            "align": "auto"
           }
         },
-        "overrides": []
-      },
-      "options": {
-        "reduceOptions": {
-          "calcs": [
-            "lastNotNull"
-          ],
-          "fields": "",
-          "values": false
-        },
-        "colorMode": "background",
-        "graphMode": "none",
-        "textMode": "value"
-      }
-    },
-    {
-      "id": 7,
-      "type": "stat",
-      "title": "Ventes du jour",
-      "description": "",
-      "datasource": {
-        "type": "prometheus",
-        "uid": "prom"
-      },
-      "gridPos": {
-        "x": 20,
-        "y": 1,
-        "w": 4,
-        "h": 4
-      },
-      "targets": [
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prom"
-          },
-          "expr": "sum(caisse_sales_today_cents{enseigne=~\"$enseigne\", magasin=~\"$magasin\"}) / 100 or vector(0)",
-          "legendFormat": "",
-          "refId": "A",
-          "instant": true,
-          "range": false
-        }
-      ],
-      "fieldConfig": {
-        "defaults": {
-          "unit": "currencyEUR",
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Muettes"
+            },
+            "properties": [
               {
-                "color": "green",
-                "value": null
+                "id": "custom.cellOptions",
+                "value": {
+                  "type": "color-background"
+                }
+              },
+              {
+                "id": "thresholds",
+                "value": {
+                  "mode": "absolute",
+                  "steps": [
+                    {
+                      "color": "green",
+                      "value": null
+                    },
+                    {
+                      "color": "red",
+                      "value": 1
+                    }
+                  ]
+                }
               }
             ]
           },
-          "color": {
-            "mode": "thresholds"
-          },
-          "decimals": 2
-        },
-        "overrides": []
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Ressources en alerte"
+            },
+            "properties": [
+              {
+                "id": "custom.cellOptions",
+                "value": {
+                  "type": "color-background"
+                }
+              },
+              {
+                "id": "thresholds",
+                "value": {
+                  "mode": "absolute",
+                  "steps": [
+                    {
+                      "color": "green",
+                      "value": null
+                    },
+                    {
+                      "color": "orange",
+                      "value": 1
+                    }
+                  ]
+                }
+              }
+            ]
+          }
+        ]
       },
       "options": {
-        "reduceOptions": {
-          "calcs": [
-            "lastNotNull"
-          ],
-          "fields": "",
-          "values": false
+        "showHeader": true,
+        "sortBy": [
+          {
+            "displayName": "Muettes",
+            "desc": true
+          }
+        ]
+      },
+      "transformations": [
+        {
+          "id": "joinByField",
+          "options": {
+            "byField": "enseigne",
+            "mode": "outer"
+          }
         },
-        "colorMode": "background",
-        "graphMode": "none",
-        "textMode": "value"
-      }
+        {
+          "id": "calculateField",
+          "options": {
+            "mode": "binary",
+            "binary": {
+              "left": "Value #B",
+              "operator": "-",
+              "right": "Value #A"
+            },
+            "alias": "Muettes",
+            "replaceFields": false
+          }
+        },
+        {
+          "id": "organize",
+          "options": {
+            "excludeByName": {
+              "Time": true,
+              "Time 1": true,
+              "Time 2": true,
+              "Time 3": true,
+              "Time 4": true,
+              "Time 5": true
+            },
+            "renameByName": {
+              "enseigne": "Enseigne",
+              "Value #A": "En ligne",
+              "Value #B": "Vues (24 h)",
+              "Value #C": "Ressources en alerte",
+              "Value #D": "Hors ligne SaaS",
+              "Value #E": "Tickets en attente"
+            },
+            "indexByName": {
+              "enseigne": 0,
+              "Value #B": 1,
+              "Value #A": 2,
+              "Muettes": 3,
+              "Value #C": 4,
+              "Value #D": 5,
+              "Value #E": 6
+            }
+          }
+        }
+      ]
     },
     {
-      "id": 8,
+      "id": 10,
       "type": "piechart",
       "title": "Versions de l'application",
       "datasource": {
@@ -504,10 +723,10 @@
         "uid": "prom"
       },
       "gridPos": {
-        "x": 0,
+        "x": 18,
         "y": 6,
         "w": 6,
-        "h": 8
+        "h": 9
       },
       "targets": [
         {
@@ -547,17 +766,31 @@
       }
     },
     {
-      "id": 9,
+      "id": 11,
+      "type": "row",
+      "title": "Caisses à traiter (les 15 pires)",
+      "collapsed": false,
+      "gridPos": {
+        "x": 0,
+        "y": 16,
+        "w": 24,
+        "h": 1
+      },
+      "panels": []
+    },
+    {
+      "id": 12,
       "type": "table",
-      "title": "Caisses à surveiller (tickets en attente)",
+      "title": "Processeur le plus chargé",
+      "description": "",
       "datasource": {
         "type": "prometheus",
         "uid": "prom"
       },
       "gridPos": {
-        "x": 6,
-        "y": 6,
-        "w": 18,
+        "x": 0,
+        "y": 17,
+        "w": 8,
         "h": 8
       },
       "targets": [
@@ -566,7 +799,7 @@
             "type": "prometheus",
             "uid": "prom"
           },
-          "expr": "sort_desc(caisse_tickets_pending{enseigne=~\"$enseigne\", magasin=~\"$magasin\"} > 0)",
+          "expr": "topk(15, caisse:cpu_percent{enseigne=~\"$enseigne\", magasin=~\"$magasin\"})",
           "legendFormat": "",
           "refId": "A",
           "instant": true,
@@ -589,7 +822,15 @@
             "properties": [
               {
                 "id": "displayName",
-                "value": "En attente"
+                "value": "Processeur"
+              },
+              {
+                "id": "unit",
+                "value": "percent"
+              },
+              {
+                "id": "decimals",
+                "value": 0
               },
               {
                 "id": "custom.cellOptions",
@@ -608,14 +849,54 @@
                     },
                     {
                       "color": "orange",
-                      "value": 20
+                      "value": 70
                     },
                     {
                       "color": "red",
-                      "value": 200
+                      "value": 90
                     }
                   ]
                 }
+              },
+              {
+                "id": "custom.width",
+                "value": 120
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Enseigne"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 95
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Magasin"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 150
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Poste"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 55
               }
             ]
           }
@@ -625,7 +906,7 @@
         "showHeader": true,
         "sortBy": [
           {
-            "displayName": "En attente",
+            "displayName": "Processeur",
             "desc": true
           }
         ]
@@ -639,20 +920,833 @@
               "__name__": true,
               "job": true,
               "instance": true,
-              "plateforme": true
+              "plateforme": true,
+              "machine": true
             },
             "renameByName": {
               "enseigne": "Enseigne",
               "magasin": "Magasin",
               "poste": "Poste",
               "machine": "Machine"
+            },
+            "indexByName": {
+              "enseigne": 0,
+              "magasin": 1,
+              "poste": 2,
+              "Value": 3
             }
           }
         }
       ]
     },
     {
-      "id": 10,
+      "id": 13,
+      "type": "table",
+      "title": "Mémoire la plus utilisée",
+      "description": "",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prom"
+      },
+      "gridPos": {
+        "x": 8,
+        "y": 17,
+        "w": 8,
+        "h": 8
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prom"
+          },
+          "expr": "topk(15, caisse:memoire_percent{enseigne=~\"$enseigne\", magasin=~\"$magasin\"})",
+          "legendFormat": "",
+          "refId": "A",
+          "instant": true,
+          "range": false,
+          "format": "table"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "align": "auto"
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Value"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "Mémoire"
+              },
+              {
+                "id": "unit",
+                "value": "percent"
+              },
+              {
+                "id": "decimals",
+                "value": 0
+              },
+              {
+                "id": "custom.cellOptions",
+                "value": {
+                  "type": "color-background"
+                }
+              },
+              {
+                "id": "thresholds",
+                "value": {
+                  "mode": "absolute",
+                  "steps": [
+                    {
+                      "color": "green",
+                      "value": null
+                    },
+                    {
+                      "color": "orange",
+                      "value": 80
+                    },
+                    {
+                      "color": "red",
+                      "value": 90
+                    }
+                  ]
+                }
+              },
+              {
+                "id": "custom.width",
+                "value": 120
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Enseigne"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 95
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Magasin"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 150
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Poste"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 55
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "showHeader": true,
+        "sortBy": [
+          {
+            "displayName": "Mémoire",
+            "desc": true
+          }
+        ]
+      },
+      "transformations": [
+        {
+          "id": "organize",
+          "options": {
+            "excludeByName": {
+              "Time": true,
+              "__name__": true,
+              "job": true,
+              "instance": true,
+              "plateforme": true,
+              "machine": true
+            },
+            "renameByName": {
+              "enseigne": "Enseigne",
+              "magasin": "Magasin",
+              "poste": "Poste",
+              "machine": "Machine"
+            },
+            "indexByName": {
+              "enseigne": 0,
+              "magasin": 1,
+              "poste": 2,
+              "Value": 3
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": 14,
+      "type": "table",
+      "title": "Disque le plus plein (/)",
+      "description": "",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prom"
+      },
+      "gridPos": {
+        "x": 16,
+        "y": 17,
+        "w": 8,
+        "h": 8
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prom"
+          },
+          "expr": "topk(15, caisse:disque_percent{enseigne=~\"$enseigne\", magasin=~\"$magasin\"})",
+          "legendFormat": "",
+          "refId": "A",
+          "instant": true,
+          "range": false,
+          "format": "table"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "align": "auto"
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Value"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "Disque"
+              },
+              {
+                "id": "unit",
+                "value": "percent"
+              },
+              {
+                "id": "decimals",
+                "value": 0
+              },
+              {
+                "id": "custom.cellOptions",
+                "value": {
+                  "type": "color-background"
+                }
+              },
+              {
+                "id": "thresholds",
+                "value": {
+                  "mode": "absolute",
+                  "steps": [
+                    {
+                      "color": "green",
+                      "value": null
+                    },
+                    {
+                      "color": "orange",
+                      "value": 80
+                    },
+                    {
+                      "color": "red",
+                      "value": 90
+                    }
+                  ]
+                }
+              },
+              {
+                "id": "custom.width",
+                "value": 120
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Enseigne"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 95
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Magasin"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 150
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Poste"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 55
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "showHeader": true,
+        "sortBy": [
+          {
+            "displayName": "Disque",
+            "desc": true
+          }
+        ]
+      },
+      "transformations": [
+        {
+          "id": "organize",
+          "options": {
+            "excludeByName": {
+              "Time": true,
+              "__name__": true,
+              "job": true,
+              "instance": true,
+              "plateforme": true,
+              "machine": true
+            },
+            "renameByName": {
+              "enseigne": "Enseigne",
+              "magasin": "Magasin",
+              "poste": "Poste",
+              "machine": "Machine"
+            },
+            "indexByName": {
+              "enseigne": 0,
+              "magasin": 1,
+              "poste": 2,
+              "Value": 3
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": 15,
+      "type": "table",
+      "title": "Température la plus élevée",
+      "description": "",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prom"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 25,
+        "w": 8,
+        "h": 8
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prom"
+          },
+          "expr": "topk(15, caisse:temperature_max_celsius{enseigne=~\"$enseigne\", magasin=~\"$magasin\"})",
+          "legendFormat": "",
+          "refId": "A",
+          "instant": true,
+          "range": false,
+          "format": "table"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "align": "auto"
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Value"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "Température"
+              },
+              {
+                "id": "unit",
+                "value": "celsius"
+              },
+              {
+                "id": "decimals",
+                "value": 0
+              },
+              {
+                "id": "custom.cellOptions",
+                "value": {
+                  "type": "color-background"
+                }
+              },
+              {
+                "id": "thresholds",
+                "value": {
+                  "mode": "absolute",
+                  "steps": [
+                    {
+                      "color": "green",
+                      "value": null
+                    },
+                    {
+                      "color": "orange",
+                      "value": 70
+                    },
+                    {
+                      "color": "red",
+                      "value": 85
+                    }
+                  ]
+                }
+              },
+              {
+                "id": "custom.width",
+                "value": 120
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Enseigne"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 95
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Magasin"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 150
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Poste"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 55
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "showHeader": true,
+        "sortBy": [
+          {
+            "displayName": "Température",
+            "desc": true
+          }
+        ]
+      },
+      "transformations": [
+        {
+          "id": "organize",
+          "options": {
+            "excludeByName": {
+              "Time": true,
+              "__name__": true,
+              "job": true,
+              "instance": true,
+              "plateforme": true,
+              "machine": true
+            },
+            "renameByName": {
+              "enseigne": "Enseigne",
+              "magasin": "Magasin",
+              "poste": "Poste",
+              "machine": "Machine"
+            },
+            "indexByName": {
+              "enseigne": 0,
+              "magasin": 1,
+              "poste": 2,
+              "Value": 3
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": 16,
+      "type": "table",
+      "title": "Application arrêtée ou figée",
+      "description": "Temps écoulé depuis la dernière actualisation des mesures par l'application (au-delà de 3 minutes).",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prom"
+      },
+      "gridPos": {
+        "x": 8,
+        "y": 25,
+        "w": 8,
+        "h": 8
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prom"
+          },
+          "expr": "topk(15, max by (enseigne, magasin, poste, machine) (time() - caisse_app_last_write_timestamp_seconds{enseigne=~\"$enseigne\", magasin=~\"$magasin\"}) > 180)",
+          "legendFormat": "",
+          "refId": "A",
+          "instant": true,
+          "range": false,
+          "format": "table"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "align": "auto"
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Value"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "Sans nouvelles depuis"
+              },
+              {
+                "id": "unit",
+                "value": "s"
+              },
+              {
+                "id": "decimals",
+                "value": 0
+              },
+              {
+                "id": "custom.cellOptions",
+                "value": {
+                  "type": "color-background"
+                }
+              },
+              {
+                "id": "thresholds",
+                "value": {
+                  "mode": "absolute",
+                  "steps": [
+                    {
+                      "color": "green",
+                      "value": null
+                    },
+                    {
+                      "color": "red",
+                      "value": 180
+                    }
+                  ]
+                }
+              },
+              {
+                "id": "custom.width",
+                "value": 120
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Enseigne"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 95
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Magasin"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 150
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Poste"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 55
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "showHeader": true,
+        "sortBy": [
+          {
+            "displayName": "Sans nouvelles depuis",
+            "desc": true
+          }
+        ]
+      },
+      "transformations": [
+        {
+          "id": "organize",
+          "options": {
+            "excludeByName": {
+              "Time": true,
+              "__name__": true,
+              "job": true,
+              "instance": true,
+              "plateforme": true,
+              "machine": true
+            },
+            "renameByName": {
+              "enseigne": "Enseigne",
+              "magasin": "Magasin",
+              "poste": "Poste",
+              "machine": "Machine"
+            },
+            "indexByName": {
+              "enseigne": 0,
+              "magasin": 1,
+              "poste": 2,
+              "Value": 3
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": 17,
+      "type": "table",
+      "title": "Caisses muettes",
+      "description": "Caisses qui ont envoyé des mesures dans les 24 dernières heures mais plus depuis 5 minutes.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prom"
+      },
+      "gridPos": {
+        "x": 16,
+        "y": 25,
+        "w": 8,
+        "h": 8
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prom"
+          },
+          "expr": "topk(15, count by (enseigne, magasin, poste, machine) (caisse:connue{enseigne=~\"$enseigne\", magasin=~\"$magasin\"}) unless count by (enseigne, magasin, poste, machine) (up{job=\"caisse\", enseigne=~\"$enseigne\", magasin=~\"$magasin\"}))",
+          "legendFormat": "",
+          "refId": "A",
+          "instant": true,
+          "range": false,
+          "format": "table"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "align": "auto"
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Value"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "Vue ces dernières 24 h"
+              },
+              {
+                "id": "unit",
+                "value": "none"
+              },
+              {
+                "id": "decimals",
+                "value": 0
+              },
+              {
+                "id": "custom.cellOptions",
+                "value": {
+                  "type": "color-background"
+                }
+              },
+              {
+                "id": "thresholds",
+                "value": {
+                  "mode": "absolute",
+                  "steps": [
+                    {
+                      "color": "red",
+                      "value": null
+                    }
+                  ]
+                }
+              },
+              {
+                "id": "custom.width",
+                "value": 120
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Enseigne"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 95
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Magasin"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 150
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Poste"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 55
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "showHeader": true,
+        "sortBy": [
+          {
+            "displayName": "Vue ces dernières 24 h",
+            "desc": true
+          }
+        ]
+      },
+      "transformations": [
+        {
+          "id": "organize",
+          "options": {
+            "excludeByName": {
+              "Time": true,
+              "__name__": true,
+              "job": true,
+              "instance": true,
+              "plateforme": true,
+              "machine": true
+            },
+            "renameByName": {
+              "enseigne": "Enseigne",
+              "magasin": "Magasin",
+              "poste": "Poste",
+              "machine": "Machine"
+            },
+            "indexByName": {
+              "enseigne": 0,
+              "magasin": 1,
+              "poste": 2,
+              "Value": 3
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": 18,
+      "type": "row",
+      "title": "Tendance du parc",
+      "collapsed": false,
+      "gridPos": {
+        "x": 0,
+        "y": 33,
+        "w": 24,
+        "h": 1
+      },
+      "panels": []
+    },
+    {
+      "id": 19,
       "type": "timeseries",
       "title": "Caisses en ligne",
       "description": "",
@@ -662,8 +1756,8 @@
       },
       "gridPos": {
         "x": 0,
-        "y": 15,
-        "w": 8,
+        "y": 34,
+        "w": 6,
         "h": 7
       },
       "targets": [
@@ -701,17 +1795,249 @@
       }
     },
     {
-      "id": 11,
+      "id": 20,
       "type": "timeseries",
-      "title": "Tickets en attente (total)",
-      "description": "Une courbe qui monte longtemps = réseau ou serveur indisponible.",
+      "title": "Processeur du parc",
+      "description": "",
       "datasource": {
         "type": "prometheus",
         "uid": "prom"
       },
       "gridPos": {
-        "x": 8,
-        "y": 15,
+        "x": 6,
+        "y": 34,
+        "w": 6,
+        "h": 7
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prom"
+          },
+          "expr": "quantile(0.5, caisse:cpu_percent{enseigne=~\"$enseigne\", magasin=~\"$magasin\"})",
+          "legendFormat": "médiane",
+          "refId": "A",
+          "instant": false,
+          "range": true
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prom"
+          },
+          "expr": "quantile(0.95, caisse:cpu_percent{enseigne=~\"$enseigne\", magasin=~\"$magasin\"})",
+          "legendFormat": "95e centile (1 caisse sur 20 fait pire)",
+          "refId": "B",
+          "instant": false,
+          "range": true
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prom"
+          },
+          "expr": "max(caisse:cpu_percent{enseigne=~\"$enseigne\", magasin=~\"$magasin\"})",
+          "legendFormat": "pire caisse",
+          "refId": "C",
+          "instant": false,
+          "range": true
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent",
+          "custom": {
+            "lineWidth": 2,
+            "fillOpacity": 12,
+            "showPoints": "never"
+          },
+          "min": 0,
+          "max": 100
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      }
+    },
+    {
+      "id": 21,
+      "type": "timeseries",
+      "title": "Mémoire du parc",
+      "description": "",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prom"
+      },
+      "gridPos": {
+        "x": 12,
+        "y": 34,
+        "w": 6,
+        "h": 7
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prom"
+          },
+          "expr": "quantile(0.5, caisse:memoire_percent{enseigne=~\"$enseigne\", magasin=~\"$magasin\"})",
+          "legendFormat": "médiane",
+          "refId": "A",
+          "instant": false,
+          "range": true
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prom"
+          },
+          "expr": "quantile(0.95, caisse:memoire_percent{enseigne=~\"$enseigne\", magasin=~\"$magasin\"})",
+          "legendFormat": "95e centile (1 caisse sur 20 fait pire)",
+          "refId": "B",
+          "instant": false,
+          "range": true
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prom"
+          },
+          "expr": "max(caisse:memoire_percent{enseigne=~\"$enseigne\", magasin=~\"$magasin\"})",
+          "legendFormat": "pire caisse",
+          "refId": "C",
+          "instant": false,
+          "range": true
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent",
+          "custom": {
+            "lineWidth": 2,
+            "fillOpacity": 12,
+            "showPoints": "never"
+          },
+          "min": 0,
+          "max": 100
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      }
+    },
+    {
+      "id": 22,
+      "type": "timeseries",
+      "title": "Disque du parc",
+      "description": "",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prom"
+      },
+      "gridPos": {
+        "x": 18,
+        "y": 34,
+        "w": 6,
+        "h": 7
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prom"
+          },
+          "expr": "quantile(0.5, caisse:disque_percent{enseigne=~\"$enseigne\", magasin=~\"$magasin\"})",
+          "legendFormat": "médiane",
+          "refId": "A",
+          "instant": false,
+          "range": true
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prom"
+          },
+          "expr": "quantile(0.95, caisse:disque_percent{enseigne=~\"$enseigne\", magasin=~\"$magasin\"})",
+          "legendFormat": "95e centile (1 caisse sur 20 fait pire)",
+          "refId": "B",
+          "instant": false,
+          "range": true
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prom"
+          },
+          "expr": "max(caisse:disque_percent{enseigne=~\"$enseigne\", magasin=~\"$magasin\"})",
+          "legendFormat": "pire caisse",
+          "refId": "C",
+          "instant": false,
+          "range": true
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent",
+          "custom": {
+            "lineWidth": 2,
+            "fillOpacity": 12,
+            "showPoints": "never"
+          },
+          "min": 0,
+          "max": 100
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      }
+    },
+    {
+      "id": 23,
+      "type": "row",
+      "title": "Détail d'une caisse (choisir la machine en haut)",
+      "collapsed": false,
+      "gridPos": {
+        "x": 0,
+        "y": 41,
+        "w": 24,
+        "h": 1
+      },
+      "panels": []
+    },
+    {
+      "id": 24,
+      "type": "timeseries",
+      "title": "Processeur",
+      "description": "",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prom"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 42,
         "w": 8,
         "h": 7
       },
@@ -721,9 +2047,195 @@
             "type": "prometheus",
             "uid": "prom"
           },
-          "expr": "sum(caisse_tickets_pending{enseigne=~\"$enseigne\", magasin=~\"$magasin\"})",
-          "legendFormat": "en attente",
+          "expr": "caisse:cpu_percent{machine=~\"$machine\"}",
+          "legendFormat": "utilisé",
           "refId": "A",
+          "instant": false,
+          "range": true
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prom"
+          },
+          "expr": "caisse:iowait_percent{machine=~\"$machine\"}",
+          "legendFormat": "attente du disque",
+          "refId": "B",
+          "instant": false,
+          "range": true
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent",
+          "custom": {
+            "lineWidth": 2,
+            "fillOpacity": 12,
+            "showPoints": "never"
+          },
+          "min": 0,
+          "max": 100
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      }
+    },
+    {
+      "id": 25,
+      "type": "timeseries",
+      "title": "Mémoire utilisée",
+      "description": "",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prom"
+      },
+      "gridPos": {
+        "x": 8,
+        "y": 42,
+        "w": 8,
+        "h": 7
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prom"
+          },
+          "expr": "caisse:memoire_percent{machine=~\"$machine\"}",
+          "legendFormat": "{{magasin}} poste {{poste}}",
+          "refId": "A",
+          "instant": false,
+          "range": true
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent",
+          "custom": {
+            "lineWidth": 2,
+            "fillOpacity": 12,
+            "showPoints": "never"
+          },
+          "min": 0,
+          "max": 100
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      }
+    },
+    {
+      "id": 26,
+      "type": "timeseries",
+      "title": "Disque utilisé (/)",
+      "description": "",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prom"
+      },
+      "gridPos": {
+        "x": 16,
+        "y": 42,
+        "w": 8,
+        "h": 7
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prom"
+          },
+          "expr": "caisse:disque_percent{machine=~\"$machine\"}",
+          "legendFormat": "{{magasin}} poste {{poste}}",
+          "refId": "A",
+          "instant": false,
+          "range": true
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent",
+          "custom": {
+            "lineWidth": 2,
+            "fillOpacity": 12,
+            "showPoints": "never"
+          },
+          "min": 0,
+          "max": 100
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      }
+    },
+    {
+      "id": 27,
+      "type": "timeseries",
+      "title": "Charge du système",
+      "description": "",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prom"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 49,
+        "w": 8,
+        "h": 7
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prom"
+          },
+          "expr": "node_load1{machine=~\"$machine\"}",
+          "legendFormat": "1 min",
+          "refId": "A",
+          "instant": false,
+          "range": true
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prom"
+          },
+          "expr": "node_load5{machine=~\"$machine\"}",
+          "legendFormat": "5 min",
+          "refId": "B",
+          "instant": false,
+          "range": true
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prom"
+          },
+          "expr": "node_load15{machine=~\"$machine\"}",
+          "legendFormat": "15 min",
+          "refId": "C",
           "instant": false,
           "range": true
         }
@@ -750,17 +2262,17 @@
       }
     },
     {
-      "id": 12,
+      "id": 28,
       "type": "timeseries",
-      "title": "Ventes du jour (cumul, toutes caisses)",
+      "title": "Température",
       "description": "",
       "datasource": {
         "type": "prometheus",
         "uid": "prom"
       },
       "gridPos": {
-        "x": 16,
-        "y": 15,
+        "x": 8,
+        "y": 49,
         "w": 8,
         "h": 7
       },
@@ -770,8 +2282,8 @@
             "type": "prometheus",
             "uid": "prom"
           },
-          "expr": "sum(caisse_sales_today_cents{enseigne=~\"$enseigne\", magasin=~\"$magasin\"}) / 100",
-          "legendFormat": "ventes",
+          "expr": "caisse:temperature_max_celsius{machine=~\"$machine\"}",
+          "legendFormat": "{{magasin}} poste {{poste}}",
           "refId": "A",
           "instant": false,
           "range": true
@@ -779,7 +2291,7 @@
       ],
       "fieldConfig": {
         "defaults": {
-          "unit": "currencyEUR",
+          "unit": "celsius",
           "custom": {
             "lineWidth": 2,
             "fillOpacity": 12,
@@ -799,132 +2311,17 @@
       }
     },
     {
-      "id": 13,
-      "type": "row",
-      "title": "Détail d'une caisse (choisir la machine en haut)",
-      "collapsed": false,
-      "gridPos": {
-        "x": 0,
-        "y": 22,
-        "w": 24,
-        "h": 1
-      },
-      "panels": []
-    },
-    {
-      "id": 14,
+      "id": 29,
       "type": "timeseries",
-      "title": "Processeur",
-      "description": "",
-      "datasource": {
-        "type": "prometheus",
-        "uid": "prom"
-      },
-      "gridPos": {
-        "x": 0,
-        "y": 23,
-        "w": 8,
-        "h": 7
-      },
-      "targets": [
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prom"
-          },
-          "expr": "100 * (1 - avg by (machine) (rate(node_cpu_seconds_total{mode=\"idle\", machine=~\"$machine\"}[5m])))",
-          "legendFormat": "{{machine}}",
-          "refId": "A",
-          "instant": false,
-          "range": true
-        }
-      ],
-      "fieldConfig": {
-        "defaults": {
-          "unit": "percent",
-          "custom": {
-            "lineWidth": 2,
-            "fillOpacity": 12,
-            "showPoints": "never"
-          },
-          "min": 0,
-          "max": 100
-        },
-        "overrides": []
-      },
-      "options": {
-        "legend": {
-          "displayMode": "list",
-          "placement": "bottom"
-        },
-        "tooltip": {
-          "mode": "multi"
-        }
-      }
-    },
-    {
-      "id": 15,
-      "type": "timeseries",
-      "title": "Mémoire utilisée",
-      "description": "",
-      "datasource": {
-        "type": "prometheus",
-        "uid": "prom"
-      },
-      "gridPos": {
-        "x": 8,
-        "y": 23,
-        "w": 8,
-        "h": 7
-      },
-      "targets": [
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prom"
-          },
-          "expr": "100 * (1 - node_memory_MemAvailable_bytes{machine=~\"$machine\"} / node_memory_MemTotal_bytes{machine=~\"$machine\"})",
-          "legendFormat": "{{machine}}",
-          "refId": "A",
-          "instant": false,
-          "range": true
-        }
-      ],
-      "fieldConfig": {
-        "defaults": {
-          "unit": "percent",
-          "custom": {
-            "lineWidth": 2,
-            "fillOpacity": 12,
-            "showPoints": "never"
-          },
-          "min": 0,
-          "max": 100
-        },
-        "overrides": []
-      },
-      "options": {
-        "legend": {
-          "displayMode": "list",
-          "placement": "bottom"
-        },
-        "tooltip": {
-          "mode": "multi"
-        }
-      }
-    },
-    {
-      "id": 16,
-      "type": "timeseries",
-      "title": "Disque utilisé (/)",
-      "description": "",
+      "title": "Depuis le dernier démarrage",
+      "description": "Une courbe qui retombe à zéro = la caisse a redémarré.",
       "datasource": {
         "type": "prometheus",
         "uid": "prom"
       },
       "gridPos": {
         "x": 16,
-        "y": 23,
+        "y": 49,
         "w": 8,
         "h": 7
       },
@@ -934,8 +2331,8 @@
             "type": "prometheus",
             "uid": "prom"
           },
-          "expr": "100 * (1 - node_filesystem_avail_bytes{mountpoint=\"/\", machine=~\"$machine\"} / node_filesystem_size_bytes{mountpoint=\"/\", machine=~\"$machine\"})",
-          "legendFormat": "{{machine}}",
+          "expr": "caisse:uptime_seconds{machine=~\"$machine\"}",
+          "legendFormat": "{{magasin}} poste {{poste}}",
           "refId": "A",
           "instant": false,
           "range": true
@@ -943,14 +2340,12 @@
       ],
       "fieldConfig": {
         "defaults": {
-          "unit": "percent",
+          "unit": "s",
           "custom": {
             "lineWidth": 2,
             "fillOpacity": 12,
             "showPoints": "never"
-          },
-          "min": 0,
-          "max": 100
+          }
         },
         "overrides": []
       },
@@ -965,7 +2360,7 @@
       }
     },
     {
-      "id": 17,
+      "id": 30,
       "type": "state-timeline",
       "title": "Services (vert = actif)",
       "datasource": {
@@ -974,7 +2369,7 @@
       },
       "gridPos": {
         "x": 0,
-        "y": 30,
+        "y": 56,
         "w": 12,
         "h": 7
       },
@@ -985,7 +2380,7 @@
             "uid": "prom"
           },
           "expr": "node_systemd_unit_state{state=\"active\", machine=~\"$machine\"}",
-          "legendFormat": "{{machine}} · {{name}}",
+          "legendFormat": "{{name}}",
           "refId": "A",
           "instant": false,
           "range": true
@@ -1022,9 +2417,9 @@
       }
     },
     {
-      "id": 18,
+      "id": 31,
       "type": "timeseries",
-      "title": "Tickets en attente et redémarrages",
+      "title": "Tickets en attente et redémarrages de l'application",
       "description": "",
       "datasource": {
         "type": "prometheus",
@@ -1032,7 +2427,7 @@
       },
       "gridPos": {
         "x": 12,
-        "y": 30,
+        "y": 56,
         "w": 12,
         "h": 7
       },
@@ -1043,7 +2438,7 @@
             "uid": "prom"
           },
           "expr": "caisse_tickets_pending{machine=~\"$machine\"}",
-          "legendFormat": "{{machine}} · tickets en attente",
+          "legendFormat": "tickets en attente",
           "refId": "A",
           "instant": false,
           "range": true
@@ -1054,7 +2449,7 @@
             "uid": "prom"
           },
           "expr": "kiosk_service_restarts{unit=\"storepos.service\", machine=~\"$machine\"}",
-          "legendFormat": "{{machine}} · redémarrages de l'app",
+          "legendFormat": "redémarrages de l'application",
           "refId": "B",
           "instant": false,
           "range": true
@@ -1082,7 +2477,7 @@
       }
     },
     {
-      "id": 19,
+      "id": 32,
       "type": "table",
       "title": "Logiciels installés",
       "datasource": {
@@ -1091,7 +2486,7 @@
       },
       "gridPos": {
         "x": 0,
-        "y": 37,
+        "y": 63,
         "w": 12,
         "h": 7
       },
@@ -1141,7 +2536,7 @@
       ]
     },
     {
-      "id": 20,
+      "id": 33,
       "type": "table",
       "title": "Application : identité et état",
       "datasource": {
@@ -1150,7 +2545,7 @@
       },
       "gridPos": {
         "x": 12,
-        "y": 37,
+        "y": 63,
         "w": 12,
         "h": 7
       },
@@ -1198,7 +2593,7 @@
       ]
     },
     {
-      "id": 21,
+      "id": 34,
       "type": "logs",
       "title": "Journaux de la caisse (application, écran, SSH)",
       "datasource": {
@@ -1207,7 +2602,7 @@
       },
       "gridPos": {
         "x": 0,
-        "y": 44,
+        "y": 70,
         "w": 24,
         "h": 10
       },

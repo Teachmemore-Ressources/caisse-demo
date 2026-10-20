@@ -43,14 +43,16 @@ prometheus.remote_write "serveur" {
 //  - caisse.prom : écrit par l'application de caisse (tickets en attente, version, ventes du jour…)
 //  - kiosk.prom  : écrit par le script storepos-kiosk-metrics (versions des paquets, périphériques USB…)
 prometheus.exporter.unix "caisse" {
-  set_collectors = ["cpu", "diskstats", "filesystem", "loadavg", "meminfo", "netdev", "uname", "time", "uptime", "stat", "os", "systemd", "textfile", "hwmon", "thermal_zone"]
+  // Santé seulement : processeur, charge, mémoire, disque système, services, température, version. Pas de trafic réseau ni de statistiques
+  // par disque (diskstats, netdev, stat, thermal_zone retirés) : elles pèsent lourd à 6000 caisses et ne disent rien de l'état de santé.
+  set_collectors = ["cpu", "filesystem", "loadavg", "meminfo", "uname", "time", "uptime", "os", "systemd", "textfile", "hwmon"]
 
   textfile {
     directory = "/var/lib/storepos-kiosk/metrics"
   }
 
   systemd {
-    unit_include = "(storepos|lightdm|ssh|sshd|teamviewerd|storepos-kiosk-alloy)\\.service"
+    unit_include = "(storepos|lightdm|ssh|sshd|teamviewerd|rustdesk|glpi-agent|storepos-kiosk-alloy)\\.service"
   }
 
   filesystem {
@@ -77,9 +79,33 @@ prometheus.relabel "reduire" {
     replacement  = "caisse"
   }
 
+  // LISTE BLANCHE : seules ces métriques de santé partent. Tout le reste est écarté, y compris l'activité commerciale (tickets et ventes
+  // du jour, catalogue, session du caissier) : ce sont des données de vos clients, pas des indicateurs de santé. Une métrique ajoutée plus
+  // tard ne part pas tant qu'on ne l'ajoute pas ICI (le volume reste maîtrisé).
   rule {
     source_labels = ["__name__"]
-    regex         = "go_.*|process_.*|promhttp_.*|node_scrape_collector_duration_seconds"
+    regex         = "up|node_cpu_seconds_total|node_load1|node_load5|node_load15|node_memory_(MemTotal|MemAvailable|SwapTotal|SwapFree)_bytes|node_filesystem_(avail|size)_bytes|node_boot_time_seconds|node_time_seconds|node_systemd_unit_state|node_hwmon_temp_celsius|node_uname_info|node_os_info|node_textfile_scrape_error|caisse_(app_info|app_last_write_timestamp_seconds|app_start_time_seconds|tickets_pending|sync_state|last_sync_timestamp_seconds|db_size_bytes)|kiosk_.*"
+    action        = "keep"
+  }
+
+  // Processeur : « idle » (taux d'utilisation) et « iowait » (disque qui peine) suffisent ; les 6 autres modes sont écartés.
+  rule {
+    source_labels = ["__name__", "mode"]
+    regex         = "node_cpu_seconds_total;(user|system|nice|irq|softirq|steal)"
+    action        = "drop"
+  }
+
+  // Disque : la partition système « / » seulement (une série par point de montage et par mesure).
+  rule {
+    source_labels = ["__name__", "mountpoint"]
+    regex         = "node_filesystem_.*;/.+"
+    action        = "drop"
+  }
+
+  // Services : l'état « actif » suffit (une alerte se déclenche quand il vaut 0).
+  rule {
+    source_labels = ["__name__", "state"]
+    regex         = "node_systemd_unit_state;(activating|deactivating|failed|inactive)"
     action        = "drop"
   }
 }

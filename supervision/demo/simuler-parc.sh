@@ -2,7 +2,7 @@
 #
 # SIMULATEUR DE PARC POUR LA DEMO : fait apparaître plusieurs magasins fictifs dans Grafana à partir d'UNE machine.
 # Chaque caisse simulée est un vrai agent Grafana Alloy (la configuration du paquet de supervision) qui envoie, à travers la
-# vraie passerelle, des mesures de caisse FICTIVES. Les magasins sont préfixés « SIM- » : ne jamais les présenter comme réels.
+# vraie passerelle, des mesures de SANTÉ FICTIVES (état de l'application ; aucune vente n'est simulée ni envoyée). Les magasins sont préfixés « SIM- » : ne jamais les présenter comme réels.
 #
 #   sudo bash simuler-parc.sh demarrer [N]     lance N caisses simulées (défaut 6, maximum 12)
 #   sudo bash simuler-parc.sh etat             liste les caisses simulées
@@ -21,7 +21,7 @@ CONF="${STOREPOS_MONITORING_CONF:-/etc/default/storepos-kiosk-monitoring}"
 ALLOY="${ALLOY_BIN:-/usr/bin/alloy}"
 CONF_ALLOY="${SIM_ALLOY_CONF:-/etc/storepos-kiosk/alloy/10-metriques.alloy}"
 MAGASINS=(PARIS-01 PARIS-02 NANTES-01 LILLE-01 BORDEAUX-01 TOULOUSE-01 MARSEILLE-01 STRASBOURG-01 RENNES-01 NICE-01 LYON-02 DIJON-01)
-PORT_BASE=12400
+PORT_BASE="${SIM_PORT_BASE:-12400}"
 
 [ "$(id -u)" = 0 ] || [ -n "${SIM_DIR:-}" ] || { echo "Exécuter avec sudo." >&2; exit 1; }
 cmd="${1:-}"
@@ -30,11 +30,10 @@ nom_pid() { echo "$RACINE/sim-$1/alloy.pid"; }
 vivant() { [ -f "$1" ] && kill -0 "$(cat "$1")" 2>/dev/null; }
 
 ecrire_mesures() {  # ecrire_mesures <n> : un fichier caisse.prom plausible, qui évolue avec l'heure
-    local n="$1" d="$RACINE/sim-$1" etat maintenant debut tickets_jour ventes attente sync derniere
+    local n="$1" d="$RACINE/sim-$1" etat maintenant debut tickets_jour attente sync derniere
     etat=$(cat "$d/incident" 2>/dev/null || echo normal)
     maintenant=$(date +%s); debut=$(cat "$d/debut")
     tickets_jour=$(( (maintenant - debut) / 40 + n * 7 ))                 # ~1 ticket toutes les 40 s
-    ventes=$(( tickets_jour * (1800 + (n * 313) % 1500) ))                # panier moyen 18 à 33 € (en centimes)
     attente=0; sync=1; derniere=$maintenant
     case "$etat" in
         attente)   attente=$(( 25 + (maintenant - $(cat "$d/incident_depuis")) / 20 )); sync=0; derniere=$(cat "$d/incident_depuis") ;;
@@ -43,18 +42,13 @@ ecrire_mesures() {  # ecrire_mesures <n> : un fichier caisse.prom plausible, qui
     local f="$d/metrics/caisse.prom"
     {
         echo "# TYPE caisse_app_info gauge"
-        echo "caisse_app_info{version=\"1.3.0\",device_id=\"sim-$n\",saas_magasin=\"SIM-${MAGASINS[$((n-1))]}\",saas_tpv=\"1\"} 1"
+        echo "caisse_app_info{version=\"1.3.3\",device_id=\"sim-$n\",saas_magasin=\"SIM-${MAGASINS[$((n-1))]}\",saas_tpv=\"1\"} 1"
         echo "caisse_app_last_write_timestamp_seconds $maintenant"
         echo "caisse_app_start_time_seconds $debut"
         echo "caisse_tickets_pending $attente"
-        echo "caisse_tickets_today $tickets_jour"
-        echo "caisse_sales_today_cents $ventes"
-        echo "caisse_catalog_products 1240"
-        echo "caisse_catalog_customers $((300 + n * 41))"
         echo "caisse_sync_state $sync"
         echo "caisse_last_sync_timestamp_seconds $derniere"
         echo "caisse_db_size_bytes $((4000000 + tickets_jour * 900))"
-        echo "caisse_cashier_session 1"
     } > "$f.tmp" && mv -f "$f.tmp" "$f"
 }
 

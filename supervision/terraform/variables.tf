@@ -117,6 +117,20 @@ variable "domaine_glpi" {
   default     = ""
 }
 
+# --- Prise en main à distance (RustDesk) --------------------------------------------------------------------------
+
+variable "activer_rustdesk" {
+  description = "true : ajoute le serveur RustDesk (annuaire + relais) pour prendre la main à distance sur les caisses, sans SSH et sans ouvrir de port chez le client. Ouvre 21115-21117/tcp et 21116/udp sur LE SERVEUR."
+  type        = bool
+  default     = false
+}
+
+variable "domaine_rustdesk" {
+  description = "Nom DNS du serveur RustDesk, ex. rustdesk.exemple.fr (obligatoire si activer_rustdesk)."
+  type        = string
+  default     = ""
+}
+
 # --- Exploitation -------------------------------------------------------------------------------------------------
 
 variable "alert_email" {

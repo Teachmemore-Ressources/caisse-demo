@@ -34,9 +34,9 @@ q() { curl -fsS --get "http://127.0.0.1:$P/api/v1/query" --data-urlencode "query
 S demarrer 3 | tail -1
 S etat | grep -c 'agent:actif' | grep -q '^3$' && ok "3 agents Alloy actifs" || ko "agents non actifs : $(S etat)"
 echo "  attente des mesures (jusqu'à 150 s)…"
-for i in $(seq 1 75); do [ "$(q 'count(caisse_tickets_today{enseigne="demo"})')" = "3" ] && break; sleep 2; done
-[ "$(q 'count(caisse_tickets_today{enseigne="demo"})')" = "3" ] && ok "3 caisses simulées visibles dans Prometheus" || ko "caisses absentes ($(q 'count(caisse_tickets_today)'))"
-[ "$(q 'count(caisse_tickets_today{magasin=~"SIM-.*"})')" = "3" ] && ok "toutes préfixées SIM-" || ko "préfixe SIM- absent"
+for i in $(seq 1 75); do [ "$(q 'count(caisse_app_info{enseigne="demo"})')" = "3" ] && break; sleep 2; done
+[ "$(q 'count(caisse_app_info{enseigne="demo"})')" = "3" ] && ok "3 caisses simulées visibles dans Prometheus" || ko "caisses absentes ($(q 'count(caisse_tickets_today)'))"
+[ "$(q 'count(caisse_app_info{magasin=~"SIM-.*"})')" = "3" ] && ok "toutes préfixées SIM-" || ko "préfixe SIM- absent"
 [ "$(q 'count(count by (machine) (up{job="caisse"}))')" = "3" ] && ok "3 machines distinctes (up{job=\"caisse\"}, base du tableau de bord)" || ko "machines : $(q 'count(count by (machine) (up{job="caisse"}))')"
 [ "$(q 'count(caisse_app_info{version="1.3.0"})')" = "3" ] && ok "version de l'application renseignée" || ko "caisse_app_info"
 [ "$(q 'sum(caisse_tickets_pending)')" = "0" ] && ok "état normal : aucun ticket en attente" || ko "tickets en attente au départ"

@@ -1,132 +1,115 @@
-# Caisse Démo 1.3.3 — maquette de caisse enregistreuse tactile
+# Caisse Démo — caisse tactile + supervision d'un parc de caisses
 
-Application de caisse (Kotlin + Compose Desktop) pour démonstration : connexion par caissier, caisse tactile
-complète, paiements multiples, comptage de fonds, journal, synchronisation avec un SaaS et **vente hors ligne**.
-Application indépendante, conçue pour tourner en mode kiosque avec le paquet `storepos-kiosk`.
+Deux produits dans un seul dépôt :
 
-> Maquette de démonstration : ne gère ni les exigences fiscales légales (certification, archivage),
-> ni les paiements sur un vrai terminal (le TPE est simulé).
+1. **Caisse Démo 1.3.3** : application de caisse tactile (Kotlin + Compose Desktop) avec vente hors ligne et synchronisation vers un SaaS.
+2. **Supervision de parc** : suivi de la **santé** de milliers de caisses (processeur, mémoire, disque, services, état de l'application), sans ouvrir de port chez les clients, déployé sur AWS avec Terraform. Inventaire GLPI et prise en main à distance RustDesk inclus.
 
-## Nouveautés de la 1.3.3
+> Maquette de démonstration : pas de conformité fiscale légale (certification, archivage), terminal de paiement simulé.
 
-- **Bouton « i » moderne**, dessiné dans l'application : rond, translucide, avec un anneau qui se remplit pendant l'appui maintenu (2 s) ; un appui
-  bref n'ouvre rien et affiche « Maintenez 2 s ». Il ouvre une **carte d'informations** (poste : nom, adresse IP, ID TeamViewer, versions ;
-  application : magasin, caisse, réseau, dernière synchronisation, tickets en attente). Réglages inchangés : `INFO_BUTTON_ENABLED`,
-  `INFO_BUTTON_POS`, `INFO_HOLD_SECONDS` dans `/etc/default/storepos-kiosk`. Le paquet storepos-kiosk 1.3.1 retire l'ancien bouton gris.
-- Écran de connexion : les trois tuiles (Vente rapide, Stock en temps réel, Sécurisé) sont retirées.
+## Par où commencer
 
-## Nouveautés de la 1.3.2
+| Je veux… | Ouvrir |
+|---|---|
+| **Faire la démo client** (supervision, de A à Z) | [`supervision/guides/DEMO-CLIENT.md`](supervision/guides/DEMO-CLIENT.md) |
+| Comprendre l'ensemble : **schémas** de déploiement et d'infrastructure | [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) |
+| Retrouver une **commande AWS** | [`supervision/guides/AWS-COMMANDES.md`](supervision/guides/AWS-COMMANDES.md) |
+| Mettre à jour Grafana / les alertes sur le serveur | `AWS-COMMANDES.md` § 6 |
+| Déployer le serveur sur AWS | [`supervision/terraform/README.md`](supervision/terraform/README.md) |
+| Comprendre la supervision (mesures, alertes, dimensionnement) | [`supervision/README.md`](supervision/README.md) |
+| Installer un paquet sur une caisse | [`livrables/`](livrables/) (tableau ci-dessous) |
+| Voir ce qui a changé | [`CHANGELOG.md`](CHANGELOG.md) |
 
-- **Nouvel écran de connexion clair**, d'après la maquette du magasin : à gauche la marque (logo, slogan), « Bon retour sur votre caisse », trois tuiles
-  (Vente rapide, Stock en temps réel, Sécurisé), l'heure, la date, le magasin et le numéro de caisse, sur une photo de magasin ;
-  à droite une **carte blanche** avec le profil (nom de code) centré et le pavé du code d'accès aux touches arrondies.
-  La marque se règle dans la base (`marque_nom`, `marque_slogan`). La photo se remplace sans reconstruire : `/etc/caisse-demo/accueil.jpg`
-  (ou la variable `CAISSE_FOND_ACCUEIL`) ; sans photo, un décor dessiné en code est utilisé.
-- **Dates en français garanties** : elles s'affichaient en anglais (« Mon 19 Oct ») car le runtime embarqué n'a pas les données de langue.
-- L'état du réseau devient « Caisse opérationnelle » (local ou en ligne) ou « Hors ligne ».
-- Déverrouillage après la veille : même carte blanche que la connexion.
+## Arborescence
 
-## Nouveautés de la 1.3.1
-
-- **Écran de connexion** : panneau de marque à gauche, liste des profils à droite, puis **pavé de code PIN rond** (points de saisie, effacement
-  d'un chiffre, secousse si le code est faux). Palette sombre de la caisse, avatars sobres (silhouette, pas d'initiales).
-- **Police Inter** (licence SIL OFL, dans `src/main/resources/fonts`) dans toute l'application : chiffres nets, lisible de loin.
-- **Mise en veille** : après 5 minutes sans toucher (réglable : Jamais, 2, 5, 10 ou 15 min, par le responsable, dans le menu), un écran noir
-  avec l'heure (qui se déplace pour ne pas marquer l'écran) recouvre la caisse. Au toucher, le code du caissier est redemandé ; la session,
-  le ticket en cours et les paiements restent intacts dessous. Un scan pendant la veille n'ajoute rien au ticket.
-  Ne coupe pas le rétro-éclairage : cela relève du système (voir le paquet storepos-kiosk).
-- « **Mode autonome** » : aucun serveur n'est configuré ; la caisse vend seule et ne transmet rien.
-
-- **Noms de code à la connexion** : l'écran affiche « Manager » et « Caissier 01 », pas l'identité des personnes ; le vrai nom (Armel NGANDO, Alice M., Chloé D.) reste utilisé dans le système (tickets, journal, SaaS). Champ `code` ajouté à l'API du référentiel.
-
-
-## Nouveautés de la 1.3.0
-
-- **Supervision** : l'application publie ses mesures (tickets en attente, version, ventes du jour, état de la synchronisation…) dans un
-  fichier lisible par un agent Grafana Alloy, qui les envoie **en sortie** vers Prometheus. Aucun port n'est ouvert sur la caisse.
-  Voir `supervision/README.md` (agent, serveur Grafana, alertes, tableau de bord, tests de bout en bout).
-
-## Nouveautés de la 1.2.0
-
-- **Nouvelle interface**, à la manière des caisses tactiles du commerce : le **ticket et son pavé numérique à gauche**
-  (touches `Qté`, `% Remise`, `Prix`, `±`, `⌫` et gros bouton **Payer**), le **catalogue à droite** (catégories en cartes de
-  couleur, produits en cartes avec initiales et prix, fil d'Ariane, recherche).
-- On arrive **directement sur la caisse** après la connexion. Le menu **☰** donne accès au journal, au comptage, à la
-  configuration, à l'apparence (clair / sombre / auto) et aux actions réservées au responsable.
-- **Écran de paiement** en trois colonnes : moyens de paiement, règlements (avec statut du terminal carte), pavé numérique
-  avec montants rapides (+10, +20, +50, Exact).
-- **Barres de défilement tactiles** : sur écran tactile, une liste ne défile pas en glissant le doigt ; chaque liste a une poignée large.
-- **Icône propre à l'application** (dessinée pour ce projet) et **raccourci sur le bureau** créé à l'installation.
-- Mise à jour sans perte : les données (`~/.local/share/caisse-demo`) sont conservées et la base est migrée.
-
-## Pavé numérique (comme sur une caisse)
-
-1. Touchez un article dans le ticket (le dernier ajouté est sélectionné automatiquement).
-2. Choisissez ce que vous modifiez : **Qté** (par défaut), **% Remise** ou **Prix**.
-3. Tapez les chiffres : la ligne se met à jour tout de suite. `⌫` efface un chiffre ; sans saisie en cours, il retire la ligne
-   (en mode Qté) ou la remise (en mode % Remise). `±` bascule la ligne en retour.
-
-Droits : **Prix**, **±**, le mode **Retour**, une remise **au-delà de 20 %**, le retour d'un ticket, le prélèvement, la clôture,
-la réinitialisation et « Quitter » demandent le **code d'un responsable**.
-
-## Comptes de démonstration
-
-| Caissier | Code | Rôle |
-|---|---|---|
-| Alice Martin | `1234` | Caissier |
-| Bruno Lefèvre | `0000` | Responsable |
-| Chloé Dupont | `4321` | Caissier |
-
-Codes-barres de test (à taper puis Entrée, ou avec un lecteur USB, sur l'écran de caisse) : `3000001` (eau), `3000011` (croissant), `3000043` (journal)…
-
-## Installation et mise à jour (VM ou machine Linux amd64)
-
-```bash
-sudo cp caisse-demo_1.3.1_amd64.deb /tmp/
-sudo apt install /tmp/caisse-demo_1.3.1_amd64.deb      # première installation OU mise à jour de la 1.1.0
 ```
-À l'installation, le paquet :
-- installe l'application dans `/opt/caisse-demo` et la commande `caisse-demo` ;
-- installe **l'icône de l'application** (6 tailles, thème `hicolor`) et l'entrée du menu des applications ;
-- crée le **raccourci « Caisse Démo » sur le bureau** de chaque utilisateur existant (hors compte kiosque `caissepos`) et dans `/etc/skel`
-  pour les futurs comptes. Sur GNOME, le lanceur est marqué « fiable » (double-clic direct) ; sinon, clic droit puis « Autoriser le lancement » ;
-- laisse le raccourci en place lors d'une mise à jour, et le retire à la désinstallation (`apt remove caisse-demo`).
+caisse-demo/
+├── README.md, CHANGELOG.md
+├── livrables/            les paquets .deb à installer (dernière version de chacun)
+├── src/                  code de l'application de caisse (Kotlin) et ses tests
+├── tools/                construction du .deb de l'application, vérifications, ssm-executer.sh (commandes sur le serveur AWS)
+├── packaging/            icônes
+├── saas-mock/            faux SaaS pour la démo de la synchronisation
+├── docs/                 ARCHITECTURE.md et schémas (schemas/*.svg), contrat d'API (API.md), captures d'écran
+├── storepos-kiosk/       paquet « mode kiosque » (démarrage automatique en plein écran, bouton « i », administration)
+└── supervision/
+    ├── guides/           DEMO-CLIENT, AWS-COMMANDES, GUIDE-SERVEUR, GUIDE-GLPI, GUIDE-RUSTDESK
+    ├── serveur/          la passerelle : Caddy, Prometheus, Loki, Alertmanager, Grafana (Docker), tableau de bord, alertes
+    ├── terraform/        déploiement AWS de cette passerelle
+    ├── agent/            paquet de supervision installé sur chaque caisse
+    ├── remote-agent/     paquet RustDesk (prise en main à distance)
+    ├── glpi-agent/       paquet d'inventaire GLPI
+    ├── demo/             simulateur de parc pour la démo
+    └── tests/            tests automatiques (voir tests/README.md)
+```
 
-Mode kiosque (démarrage automatique en plein écran) :
+## Paquets (dossier `livrables/`)
+
+| Paquet | Où l'installer | Rôle |
+|---|---|---|
+| `caisse-demo_1.3.3_amd64.deb` | chaque caisse | l'application de caisse |
+| `storepos-kiosk_1.3.2_all.deb` | chaque caisse | mode kiosque, bouton « i », outils d'administration |
+| `storepos-kiosk-monitoring_1.2.1_all.deb` | chaque caisse | agent de supervision (envoie la santé de la machine, en sortie seulement) |
+| `storepos-kiosk-remote_1.0.0_all.deb` | chaque caisse (option) | prise en main à distance RustDesk |
+| `storepos-kiosk-glpi_1.0.0_all.deb` | chaque caisse (option) | inventaire GLPI (avec l'agent officiel `glpi-agent`) |
+
 ```bash
-sudo cp storepos-kiosk_1.3.0_all.deb /tmp/ && sudo apt install /tmp/storepos-kiosk_1.3.0_all.deb
+sudo apt install ./caisse-demo_1.3.3_amd64.deb ./storepos-kiosk_1.3.2_all.deb
+sudo apt install ./storepos-kiosk-monitoring_1.2.1_all.deb       # Grafana Alloy d'abord : voir supervision/README.md § 2
 sudo reboot
 ```
-Après une mise à jour d'une caisse déjà en kiosque : `sudo systemctl restart storepos`.
+Les données de l'application sont conservées lors d'une mise à jour (`~/.local/share/caisse-demo/`). Après la mise à jour d'une caisse déjà en kiosque :
+`sudo systemctl restart storepos`.
 
-Données : `~/.local/share/caisse-demo/` (`caisse.db`, `tickets/`).
-Variables : `CAISSE_DATA_DIR` (autre dossier), `CAISSE_FULLSCREEN=1` (plein écran sans bordure).
+## L'application de caisse
 
-## Démonstration avec le SaaS simulé
+- Connexion par **nom de code** (« Manager », « Caissier 01 ») : l'écran n'affiche pas l'identité des personnes ; le vrai nom reste utilisé dans le système (tickets, journal, SaaS). Pavé de code d'accès, **mise en veille** après 5 minutes (code redemandé, ticket intact).
+- Caisse tactile : ticket et pavé numérique à gauche (`Qté`, `% Remise`, `Prix`, `±`, `⌫`, gros bouton **Payer**), catalogue à droite, paiements multiples, comptage de fonds, journal, **vente hors ligne**.
+- Droits : **Prix**, **±**, le mode **Retour**, une remise **au-delà de 20 %**, le retour d'un ticket, le prélèvement, la clôture, la réinitialisation et « Quitter » demandent le code d'un responsable.
+- Bouton **« i »** (appui maintenu 2 s) : carte d'informations du poste (nom, IP, ID TeamViewer, versions, dernière synchronisation).
+- Dates toujours en français ; police Inter embarquée ; photo de fond remplaçable sans reconstruire : `/etc/caisse-demo/accueil.jpg`.
+
+Comptes de démonstration :
+
+| Profil à l'écran | Code | Rôle |
+|---|---|---|
+| Manager (Armel NGANDO) | `0000` | Responsable |
+| Caissier 01 (Alice M.) | `1234` | Caissier |
+| Caissier 02 (Chloé D.) | `4321` | Caissier |
+
+Codes-barres de test (à taper puis Entrée) : `3000001` (eau), `3000011` (croissant), `3000043` (journal)…
+
+### Démonstration avec le SaaS simulé
 
 ```bash
 python3 saas-mock/mock_saas.py --port 8080
 ```
-Page de suivi des tickets : `http://<ip>:8080/`. Sur la caisse : ☰ → Configuration → adresse du serveur et code `DEMO-0001`
-(ou `-0002`, `-0003`) → **Activer la caisse**. Contrat d'API : `docs/API.md`.
-Scénario hors ligne : arrêter le serveur, vendre, le relancer : les tickets partent seuls en moins de 30 s.
+Page de suivi : `http://<ip>:8080/`. Sur la caisse : ☰ → Configuration → adresse du serveur et code `DEMO-0001` (ou `-0002`, `-0003`) → **Activer la caisse**.
+Scénario hors ligne : arrêter le serveur, vendre, le relancer : les tickets partent seuls en moins de 30 s. Contrat d'API : [`docs/API.md`](docs/API.md).
 
-## Construire
+## Construire (développement)
 
 Prérequis : Linux (ou WSL), JDK 21, `rsync`, `unzip`, `curl`, Python 3. Gradle est téléchargé tout seul.
 ```bash
-bash tools/wsl-build.sh test                 # tests unitaires + captures d'écran (build/ui-snapshots) + icônes (build/icons)
+bash tools/wsl-build.sh test                 # tests unitaires + captures d'écran (build/ui-snapshots)
 bash tools/run-it.sh                         # + tests d'intégration contre le SaaS simulé
-bash tools/wsl-build.sh createDistributable  # image de l'appli + caisse-demo_<version>_amd64.deb
+bash tools/wsl-build.sh createDistributable  # image de l'appli + caisse-demo_<version>_amd64.deb à la racine
 bash tools/verify-deb.sh                     # contrôle du .deb (contenu, icônes, raccourci, dépendances, démarrage)
-bash tools/test-postinst.sh                  # teste le raccourci bureau dans un bac à sable
+python3 storepos-kiosk/build-deb.py          # paquet kiosque
+python3 tools/pkg_builder.py supervision/agent/pkg supervision/agent/dist     # paquet de supervision (idem pour remote-agent, glpi-agent)
 ```
-Les icônes sont générées par `IconeTest` (dessin vectoriel) puis copiées dans `packaging/icons/` et `src/main/resources/icon.png`.
+Après une construction, copier le nouveau `.deb` dans `livrables/` et retirer l'ancien.
+
+## Tests de la supervision
+
+```bash
+bash supervision/tests/lancer-tout.sh        # configurations, alertes, agent, scripts serveur, Terraform (hors ligne), synchronisation
+```
+Détail et tests plus lourds (bout en bout avec les vrais composants) : [`supervision/tests/README.md`](supervision/tests/README.md).
 
 ## Limites connues
-- Pas un binaire unique : un `.deb` de ~68 Mo avec un lanceur natif, un Java embarqué et les `.jar`.
+
+- Pas de binaire unique : un `.deb` de ~68 Mo avec lanceur natif, Java embarqué et `.jar`.
 - Impression via `lp` (CUPS) si disponible, sinon ticket enregistré en `.txt` ; pas de pilote ESC/POS ni de tiroir-caisse.
-- Pas encore : écran client, balance, campagnes de fidélité, gestion des produits et clients en tableaux.
-- Produits sans photo : cartes à initiales colorées (les images viendront avec le catalogue du SaaS).
 - HTTP seulement dans le simulateur : le vrai SaaS doit être en HTTPS.
-- Rendu : sans OpenGL (VM sans 3D), Skia bascule seul sur le rendu logiciel.
+- Supervision : **non testée à 6000 caisses** (estimations dans `supervision/README.md`) ; RustDesk non éprouvé en conditions réelles. GLPI est validé sur le serveur de test (20 octobre 2026) : installation, initialisation, connexion et inventaire d'une caisse.

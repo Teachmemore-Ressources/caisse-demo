@@ -1,0 +1,12 @@
+#!/bin/bash
+# Prépare l'environnement graphique du kiosque.
+# Le lancement de l'application est géré par storepos.service (systemd), pas ici.
+
+xset s off
+xset -dpms
+xset s noblank
+
+unclutter -idle 1 -root &
+
+# Bouton « i » tactile (appui maintenu) : infos de la caisse pour le technicien
+/usr/bin/storepos-kiosk-infobutton &

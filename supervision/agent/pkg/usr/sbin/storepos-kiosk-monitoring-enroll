@@ -7,7 +7,13 @@
 #        --metrics-url https://metrics.exemple.fr/api/v1/write --logs-url https://logs.exemple.fr/loki/api/v1/push \
 #        --user agent-lyon --password '...'
 #   (--metrics-user/--metrics-password et --logs-user/--logs-password si les identifiants diffèrent)
+#   Mot de passe : de préférence --password-file /chemin/fichier (une ligne) ou, sans option, saisie masquée au clavier :
+#   --password reste accepté mais le mot de passe apparaît alors dans l'historique du shell et la liste des processus.
+#   Vérification : par défaut, l'inscription teste les identifiants auprès du serveur AVANT d'écrire quoi que ce soit
+#   (refus -> rien n'est modifié). --no-verify pour inscrire hors connexion.
 #   Derrière un tunnel Cloudflare protégé par un jeton de service : ajouter --cf-access-id ID --cf-access-secret SECRET
+#
+# Code de sortie : 0 inscrite ; 1 erreur de saisie ; 2 identifiants refusés ou adresse incorrecte (rien n'est écrit).
 #
 # À lancer APRÈS la restauration d'une image « ghost », jamais avant : chaque caisse doit avoir son propre
 # identifiant machine (vider /etc/machine-id avant de capturer l'image).
@@ -16,6 +22,7 @@ set -euo pipefail
 # STOREPOS_TEST=1 (tests automatiques uniquement) : autorise un autre fichier et un autre utilisateur que root
 CONF="${STOREPOS_MONITORING_CONF:-/etc/default/storepos-kiosk-monitoring}"
 MACHINE_ID_FILE="${STOREPOS_MACHINE_ID_FILE:-/etc/machine-id}"
+CURL="${STOREPOS_CURL:-curl}"      # remplaçable par les tests
 
 if [ "${STOREPOS_TEST:-0}" != "1" ] && [ "$(id -u)" -ne 0 ]; then echo "Exécuter avec sudo." >&2; exit 1; fi
 [ -f "$CONF" ] || { echo "Fichier $CONF introuvable (paquet storepos-kiosk-monitoring installé ?)." >&2; exit 1; }
@@ -29,7 +36,7 @@ M_URL="${METRICS_URL:-}"; M_USER="${METRICS_USER:-}"; M_PASS="${METRICS_PASSWORD
 L_URL="${LOGS_URL:-}"; L_USER="${LOGS_USER:-}"; L_PASS="${LOGS_PASSWORD:-}"
 CF_ID="${CF_ACCESS_ID:-}"; CF_SECRET="${CF_ACCESS_SECRET:-}"
 ENS="${ENSEIGNE:-demo}"; MAG="${MAGASIN:-non-defini}"; POS="${POSTE:-1}"; MID="${MACHINE_ID:-}"
-SET_LOGS_USER=0; SET_LOGS_PASS=0
+SET_LOGS_USER=0; SET_LOGS_PASS=0; VERIFIER=1; PW_FILE=''
 
 while [ $# -gt 0 ]; do
     case "$1" in
@@ -38,6 +45,8 @@ while [ $# -gt 0 ]; do
         --poste) POS="$2"; shift 2 ;;
         --metrics-url) M_URL="$2"; shift 2 ;;
         --logs-url) L_URL="$2"; shift 2 ;;
+        --password-file) PW_FILE="$2"; shift 2 ;;
+        --no-verify) VERIFIER=0; shift ;;
         --user) M_USER="$2"; [ "$SET_LOGS_USER" -eq 0 ] && L_USER="$2"; shift 2 ;;
         --password) M_PASS="$2"; [ "$SET_LOGS_PASS" -eq 0 ] && L_PASS="$2"; shift 2 ;;
         --metrics-user) M_USER="$2"; shift 2 ;;
@@ -51,6 +60,17 @@ while [ $# -gt 0 ]; do
         *) echo "Argument inconnu : $1 (voir --help)" >&2; exit 1 ;;
     esac
 done
+
+# mot de passe lu dans un fichier (une ligne) ou saisi au clavier sans écho, plutôt que passé sur la ligne de commande
+if [ -n "$PW_FILE" ]; then
+    [ -r "$PW_FILE" ] || { echo "Fichier de mot de passe illisible : $PW_FILE" >&2; exit 1; }
+    M_PASS=$(head -n 1 "$PW_FILE" | tr -d '
+'); [ "$SET_LOGS_PASS" -eq 0 ] && L_PASS="$M_PASS"
+elif [ -z "$M_PASS" ] && [ -t 0 ]; then
+    read -r -s -p "Mot de passe de l'enseigne $ENS : " M_PASS; echo
+    [ "$SET_LOGS_PASS" -eq 0 ] && L_PASS="$M_PASS"
+fi
+[ -n "$M_USER" ] && [ -n "$M_PASS" ] || { echo "Identifiant et mot de passe obligatoires (--user, puis --password-file ou saisie au clavier)." >&2; exit 1; }
 
 # étiquettes : caractères simples seulement (elles deviennent des étiquettes Prometheus et Loki)
 for v in "$ENS" "$MAG" "$POS"; do
@@ -68,6 +88,24 @@ done
 [ -n "$MID" ] || MID=$(tr -d '\n' < "$MACHINE_ID_FILE" 2>/dev/null | cut -c1-12)
 [ -n "$MID" ] || { echo "Impossible de déterminer l'identifiant machine ($MACHINE_ID_FILE vide)." >&2; exit 1; }
 case "$MID" in *[!A-Za-z0-9._-]*) echo "Identifiant machine invalide : '$MID'" >&2; exit 1 ;; esac
+
+# Vérification AVANT d'écrire : un envoi vide à l'adresse des mesures. Le serveur répond 401 si l'identifiant est refusé, 404 si l'adresse est
+# fausse, et 400/204/200 si l'identifiant est bon (la requête vide est alors refusée par Prometheus, ce qui est le résultat attendu).
+verifier() { # verifier URL UTILISATEUR MOT_DE_PASSE NOM
+    local code
+    code=$("$CURL" -sS -o /dev/null -w '%{http_code}' --max-time 15 -X POST -u "$2:$3" "$1" 2>/dev/null) || code=000
+    case "$code" in
+        200|204|400|415|422) echo "  vérifié : $4 acceptés par le serveur" ;;
+        401|403) echo "REFUSÉ : identifiant ou mot de passe incorrect pour $4 (code $code). Rien n'a été modifié." >&2; exit 2 ;;
+        404)     echo "ADRESSE INCORRECTE pour $4 : $1 (code 404). Vérifier le chemin (/api/v1/write ou /loki/api/v1/push). Rien n'a été modifié." >&2; exit 2 ;;
+        000)     echo "AVERTISSEMENT : serveur injoignable pour $4 ($1) : identifiants non vérifiés. Réseau ou DNS ? Inscription poursuivie." >&2 ;;
+        *)       echo "AVERTISSEMENT : réponse inattendue du serveur pour $4 (code $code) : identifiants non vérifiés. Inscription poursuivie." >&2 ;;
+    esac
+}
+if [ "$VERIFIER" -eq 1 ] && { [ "${STOREPOS_TEST:-0}" != "1" ] || [ "${STOREPOS_VERIFY:-0}" = "1" ]; }; then
+    verifier "$M_URL" "$M_USER" "$M_PASS" "les mesures"
+    [ -n "$L_URL" ] && verifier "$L_URL" "$L_USER" "$L_PASS" "les journaux"
+fi
 
 umask 027
 TMP=$(mktemp "$CONF.XXXXXX")

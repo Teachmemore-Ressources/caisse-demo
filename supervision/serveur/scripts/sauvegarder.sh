@@ -40,7 +40,11 @@ if $DOCKER volume inspect "${PROJET}_glpi_db_data" >/dev/null 2>&1; then
     GLPI_VOLUMES="glpi_data"
 fi
 
-for v in grafana_data alertmanager_data caddy_data loki_data ${GLPI_VOLUMES:-}; do
+# RustDesk (seulement s'il est installé) : le volume contient la CLÉ PRIVÉE du serveur ; sans elle, toutes les caisses seraient à réinscrire
+RUSTDESK_VOLUMES=""
+if $DOCKER volume inspect "${PROJET}_rustdesk_data" >/dev/null 2>&1; then RUSTDESK_VOLUMES="rustdesk_data"; fi
+
+for v in grafana_data alertmanager_data caddy_data loki_data ${GLPI_VOLUMES:-} $RUSTDESK_VOLUMES; do
     echo "== Volume $v =="
     # Grafana (SQLite) et Loki : copie à chaud acceptable pour une sauvegarde de reprise ; Loki est volumineux et reconstituable (journaux de diagnostic).
     $DOCKER run --rm -v "${PROJET}_${v}:/donnees:ro" -v "$W:/sortie" alpine:3 tar -czf "/sortie/${v}.tar.gz" -C /donnees .

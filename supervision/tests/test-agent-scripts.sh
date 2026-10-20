@@ -52,6 +52,39 @@ refus "mot de passe avec apostrophe"    --password "a'b"
 refus "argument inconnu"                --pirate oui
 cp "$T/conf" "$T/conf.apres"; bash "$ENROLL" --magasin 'a b' >/dev/null 2>&1; cmp -s "$T/conf" "$T/conf.apres" && ok "le fichier n'est pas modifié après un refus" || ko "fichier altéré par un refus"
 
+echo "== inscription : vérification auprès du serveur (faux curl)"
+cat > "$T/curl-fake" <<'EOF'
+#!/bin/bash
+# imite le serveur : le code renvoyé vient de FAUX_CODE ; enregistre l'appel (sans mot de passe en clair dans le journal)
+echo "appel $*" | sed 's/:[^ ]* http/:*** http/' >> "$FAUX_LOG"
+printf '%s' "${FAUX_CODE:-400}"
+[ "${FAUX_CODE:-400}" = "000" ] && exit 7
+exit 0
+EOF
+chmod +x "$T/curl-fake"
+export STOREPOS_VERIFY=1 STOREPOS_CURL="$T/curl-fake" FAUX_LOG="$T/curl.log"
+ARGS=(--enseigne LECLERC --magasin LYON-01 --poste 2 --metrics-url https://metrics.client.fr/api/v1/write --logs-url https://logs.client.fr/loki/api/v1/push --user agent-lyon)
+cp "$T/conf" "$T/conf.avant"
+printf 'MotDePasseEnFichier1
+' > "$T/mdp"
+FAUX_CODE=401 bash "$ENROLL" "${ARGS[@]}" --password-file "$T/mdp" >"$T/out" 2>&1; rc=$?
+[ "$rc" = 2 ] && grep -q "REFUSÉ" "$T/out" && ok "identifiant refusé (401) : sortie 2 et message clair" || { ko "401 mal traité (code $rc)"; cat "$T/out"; }
+cmp -s "$T/conf" "$T/conf.avant" && ok "identifiant refusé : le fichier de réglages n'est pas modifié" || ko "fichier modifié malgré le refus"
+FAUX_CODE=404 bash "$ENROLL" "${ARGS[@]}" --password-file "$T/mdp" >"$T/out" 2>&1; rc=$?
+[ "$rc" = 2 ] && grep -q "ADRESSE INCORRECTE" "$T/out" && ok "mauvaise adresse (404) : sortie 2 et message clair" || ko "404 mal traité (code $rc)"
+FAUX_CODE=400 bash "$ENROLL" "${ARGS[@]}" --password-file "$T/mdp" >"$T/out" 2>&1; rc=$?
+[ "$rc" = 0 ] && grep -q "vérifié : les mesures" "$T/out" && grep -q "vérifié : les journaux" "$T/out" && ok "identifiant accepté (400 sur envoi vide) : inscription faite, mesures et journaux vérifiés" || { ko "cas nominal (code $rc)"; cat "$T/out"; }
+bash -c ". '$T/conf'; [ \"\$METRICS_PASSWORD\" = 'MotDePasseEnFichier1' ]" && ok "mot de passe lu dans le fichier (jamais sur la ligne de commande)" || ko "mot de passe du fichier non écrit"
+! grep -q "MotDePasseEnFichier1" "$T/curl.log" && ok "le mot de passe n'apparaît pas dans le journal de l'appel" || ko "mot de passe visible dans l'appel (journal du test)"
+FAUX_CODE=000 bash "$ENROLL" "${ARGS[@]}" --password-file "$T/mdp" >"$T/out" 2>&1; rc=$?
+[ "$rc" = 0 ] && grep -q "AVERTISSEMENT : serveur injoignable" "$T/out" && ok "serveur injoignable : avertissement, inscription poursuivie (installation hors ligne possible)" || ko "000 mal traité (code $rc)"
+: > "$T/curl.log"; FAUX_CODE=401 bash "$ENROLL" "${ARGS[@]}" --password-file "$T/mdp" --no-verify >/dev/null 2>&1; rc=$?
+[ "$rc" = 0 ] && [ ! -s "$T/curl.log" ] && ok "--no-verify : aucun appel au serveur" || ko "--no-verify ignoré"
+cp "$SUP/agent/pkg/etc/default/storepos-kiosk-monitoring" "$T/conf-vierge"
+STOREPOS_MONITORING_CONF="$T/conf-vierge" bash "$ENROLL" --metrics-url https://m.fr/api/v1/write --enseigne X1 --magasin M --poste 1 --user u </dev/null >"$T/out" 2>&1; rc=$?
+[ "$rc" = 1 ] && ok "sans mot de passe ni terminal : refusé (pas de mot de passe vide)" || ko "mot de passe vide accepté (code $rc)"
+unset STOREPOS_VERIFY STOREPOS_CURL FAUX_LOG
+
 echo "== mesures système : format et contenu"
 METRICS_DIR="$T/m" bash "$METR" && ok "script exécuté" || ko "script en échec"
 f="$T/m/kiosk.prom"

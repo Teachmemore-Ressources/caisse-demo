@@ -6,21 +6,23 @@ locals {
   # Variables lues par files/bootstrap.sh (écrites dans /etc/passerelle.env). Pas de secret ici : ils sont lus dans Parameter Store.
   user_data = join("\n", [
     templatefile("${path.module}/files/user-data-entete.sh.tftpl", {
-      region          = var.region
-      nom             = var.name
-      config_bucket   = aws_s3_bucket.config.id
-      backup_bucket   = aws_s3_bucket.sauvegardes.id
-      volume_id       = aws_ebs_volume.donnees.id
-      mode            = var.grafana_mode
-      acme_email      = var.acme_email
-      domaine_metrics = var.domaine_metrics
-      domaine_logs    = var.domaine_logs
-      domaine_grafana = var.grafana_mode == "sso" ? var.domaine_grafana : ""
-      grafana_user    = var.grafana_admin_user
-      sso_client_id   = var.sso_client_id
-      sso_domaines    = var.sso_domaines
-      glpi_active     = var.activer_glpi ? "1" : "0"
-      domaine_glpi    = var.activer_glpi ? var.domaine_glpi : ""
+      region           = var.region
+      nom              = var.name
+      config_bucket    = aws_s3_bucket.config.id
+      backup_bucket    = aws_s3_bucket.sauvegardes.id
+      volume_id        = aws_ebs_volume.donnees.id
+      mode             = var.grafana_mode
+      acme_email       = var.acme_email
+      domaine_metrics  = var.domaine_metrics
+      domaine_logs     = var.domaine_logs
+      domaine_grafana  = var.grafana_mode == "sso" ? var.domaine_grafana : ""
+      grafana_user     = var.grafana_admin_user
+      sso_client_id    = var.sso_client_id
+      sso_domaines     = var.sso_domaines
+      glpi_active      = var.activer_glpi ? "1" : "0"
+      domaine_glpi     = var.activer_glpi ? var.domaine_glpi : ""
+      rustdesk_active  = var.activer_rustdesk ? "1" : "0"
+      domaine_rustdesk = var.activer_rustdesk ? var.domaine_rustdesk : ""
     }),
     file("${path.module}/files/bootstrap.sh"),
   ])
@@ -59,6 +61,7 @@ resource "aws_instance" "passerelle" {
     aws_ssm_parameter.grafana_admin_password,
     aws_ssm_parameter.sso_client_secret,
     aws_ssm_parameter.glpi,
+    aws_ssm_parameter.rustdesk_secret,
     aws_iam_role_policy.passerelle,
   ]
 

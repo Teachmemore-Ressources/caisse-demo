@@ -1,0 +1,24 @@
+# Construction
+build/
+.gradle/
+*.class
+# Python
+__pycache__/
+*.pyc
+# Terraform : l'état contient des secrets (mot de passe Grafana, etc.) ; ne JAMAIS le publier, mais le conserver et le sauvegarder
+supervision/terraform/.terraform/
+supervision/terraform/*.tfstate
+supervision/terraform/*.tfstate.*
+supervision/terraform/terraform.tfvars
+supervision/terraform/crash.log
+# Secrets et réglages locaux
+.env
+supervision/serveur/.env
+*.pem
+*.key
+# Poste de développement
+.idea/
+.vscode/
+*.swp
+.DS_Store
+Thumbs.db

@@ -1,0 +1,92 @@
+#!/bin/bash
+#
+# storepos-kiosk-remote-enroll : inscrit cette caisse au serveur RustDesk de l'entreprise (prise en main à distance, connexion sortante).
+#
+# Usage :
+#   sudo storepos-kiosk-remote-enroll --server rustdesk.exemple.fr --key 'CLE_PUBLIQUE_DU_SERVEUR=' --secret-file /chemin/du/secret
+#   (--secret-file : fichier qui contient le secret de l'entreprise ; à supprimer après l'inscription de la caisse)
+#   ou : --password 'MOT_DE_PASSE'   pour imposer un mot de passe précis (12 à 64 caractères : lettres, chiffres, - et _)
+#
+# Le mot de passe de la caisse est DÉRIVÉ de son ID RustDesk et du secret :  24 premiers caractères de
+#   base64url( HMAC-SHA256(secret, "rustdesk:" + ID) )
+# L'administrateur le recalcule sur le serveur : scripts/rustdesk-mdp.sh <ID>. Rien n'est stocké en clair, le secret n'est pas conservé ici.
+# Ne JAMAIS passer le secret sur la ligne de commande (il resterait dans l'historique et la liste des processus).
+set -euo pipefail
+# STOREPOS_TEST=1 (tests automatiques uniquement) : autorise d'autres chemins et un utilisateur non root
+RUSTDESK="${RUSTDESK_BIN:-rustdesk}"
+CONF_DIR="${RUSTDESK_CONF_DIR:-/root/.config/rustdesk}"
+ETAT="${STOREPOS_STATE_DIR:-/var/lib/storepos-kiosk}"
+ATTENTE_ID="${RUSTDESK_ATTENTE_ID:-30}"
+
+if [ "${STOREPOS_TEST:-0}" != "1" ] && [ "$(id -u)" -ne 0 ]; then echo "Exécuter avec sudo." >&2; exit 1; fi
+
+SERVEUR=""; CLE=""; FICHIER_SECRET=""; MDP=""
+while [ $# -gt 0 ]; do
+    case "$1" in
+        --server) SERVEUR="$2"; shift 2 ;;
+        --key) CLE="$2"; shift 2 ;;
+        --secret-file) FICHIER_SECRET="$2"; shift 2 ;;
+        --password) MDP="$2"; shift 2 ;;
+        -h|--help) sed -n '3,16p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
+        *) echo "Argument inconnu : $1 (voir --help)" >&2; exit 1 ;;
+    esac
+done
+
+[ -n "$SERVEUR" ] && [ -n "$CLE" ] || { echo "--server et --key sont obligatoires (voir --help)." >&2; exit 1; }
+printf '%s' "$SERVEUR" | grep -Eq '^[A-Za-z0-9]([A-Za-z0-9.-]{0,251}[A-Za-z0-9])?$' || { echo "Nom de serveur invalide : '$SERVEUR' (nom DNS seul, sans port ni http://)." >&2; exit 1; }
+printf '%s' "$CLE" | grep -Eq '^[A-Za-z0-9+/]{43}=$' || { echo "Clé publique invalide (44 caractères base64 attendus, terminés par =)." >&2; exit 1; }
+if [ -n "$MDP" ] && [ -n "$FICHIER_SECRET" ]; then echo "Choisir --password OU --secret-file, pas les deux." >&2; exit 1; fi
+if [ -z "$MDP" ] && [ -z "$FICHIER_SECRET" ]; then echo "Il faut --secret-file (recommandé) ou --password." >&2; exit 1; fi
+if [ -n "$MDP" ]; then
+    printf '%s' "$MDP" | grep -Eq '^[A-Za-z0-9_-]{12,64}$' || { echo "Mot de passe invalide (12 à 64 caractères : lettres, chiffres, - et _)." >&2; exit 1; }
+fi
+SECRET=""
+if [ -n "$FICHIER_SECRET" ]; then
+    [ -r "$FICHIER_SECRET" ] || { echo "Fichier de secret illisible : $FICHIER_SECRET" >&2; exit 1; }
+    perms=$(stat -c %a "$FICHIER_SECRET" 2>/dev/null || echo 600)
+    [ "${perms: -1}" = "0" ] || echo "ATTENTION : $FICHIER_SECRET est lisible par tous (droits $perms) : le protéger (chmod 600) puis le supprimer après l'inscription." >&2
+    SECRET=$(tr -d '[:space:]' < "$FICHIER_SECRET")
+    [ "${#SECRET}" -ge 24 ] || { echo "Secret trop court (24 caractères minimum)." >&2; exit 1; }
+fi
+
+# --- configuration : le client ne doit parler qu'à NOTRE serveur, avec NOTRE clé -------------------------------------------------
+umask 077
+mkdir -p "$CONF_DIR"; chmod 700 "$CONF_DIR"
+TMP=$(mktemp "$CONF_DIR/.RustDesk2.XXXXXX")
+cat > "$TMP" <<EOF
+rendezvous_server = '$SERVEUR:21116'
+nat_type = 1
+serial = 0
+
+[options]
+custom-rendezvous-server = '$SERVEUR'
+relay-server = '$SERVEUR'
+key = '$CLE'
+EOF
+chmod 0600 "$TMP"; mv -f "$TMP" "$CONF_DIR/RustDesk2.toml"
+echo "Serveur configuré : $SERVEUR"
+
+[ "${STOREPOS_TEST_SANS_SERVICE:-0}" = "1" ] || { systemctl enable rustdesk.service >/dev/null 2>&1 || true; systemctl restart rustdesk.service || true; }
+
+# --- ID de la caisse (assigné au démarrage du service) ---------------------------------------------------------------------------
+ID=""
+for _ in $(seq 1 $((ATTENTE_ID / 2 + 1))); do
+    ID=$("$RUSTDESK" --get-id 2>/dev/null | tr -dc '0-9' || true)
+    [ "${#ID}" -ge 6 ] && break
+    sleep 2
+done
+[ "${#ID}" -ge 6 ] || { echo "ID RustDesk introuvable : le service est-il démarré ? (systemctl status rustdesk ; journalctl -u rustdesk)" >&2; exit 1; }
+
+# --- mot de passe de prise en main --------------------------------------------------------------------------------------------------
+if [ -n "$SECRET" ]; then
+    MDP=$(printf '%s' "rustdesk:$ID" | openssl dgst -sha256 -hmac "$SECRET" -binary | base64 -w0 | tr '+/' '-_' | tr -d '=' | cut -c1-24)
+fi
+"$RUSTDESK" --password "$MDP" >/dev/null 2>&1 || { echo "Impossible de définir le mot de passe de prise en main." >&2; exit 1; }
+unset SECRET MDP
+
+# l'ID n'est pas secret : il est affiché par le bouton « i » de la caisse (storepos-kiosk-info)
+mkdir -p "$ETAT"; printf '%s\n' "$ID" > "$ETAT/remote-id"; chmod 0644 "$ETAT/remote-id"
+
+echo "Caisse inscrite : ID RustDesk = $ID"
+[ -n "$FICHIER_SECRET" ] && echo "Mot de passe : dérivé du secret. Sur le serveur : scripts/rustdesk-mdp.sh $ID   (puis supprimer le fichier de secret de cette caisse)"
+echo "Contrôle : sudo storepos-kiosk-remote-check"

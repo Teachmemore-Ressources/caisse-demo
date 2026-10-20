@@ -1,0 +1,2 @@
+# Le compte kiosque peut lire l'ID TeamViewer (bouton « i »), et rien d'autre.
+caissepos ALL=(root) NOPASSWD: /usr/bin/teamviewer info

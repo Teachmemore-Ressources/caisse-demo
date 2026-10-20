@@ -71,6 +71,10 @@ Sur chaque caisse de cette enseigne :
 
   sudo storepos-kiosk-monitoring-enroll --enseigne $NOM --magasin <MAGASIN> --poste <N> \\
        --metrics-url https://$METRICS/api/v1/write --logs-url https://$LOGS/loki/api/v1/push \\
-       --user $NOM --password '$MOT_DE_PASSE'
+       --user $NOM
+
+Le mot de passe est demandé au clavier (saisie masquée) : il ne reste ni dans l'historique du shell ni dans la liste des processus.
+Pour scripter : --password-file /chemin/fichier (une ligne, fichier à effacer ensuite). L'inscription vérifie l'identifiant auprès du serveur
+avant d'écrire quoi que ce soit : un mot de passe faux ou une adresse incorrecte est signalé tout de suite.
 
 EOF

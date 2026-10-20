@@ -1,0 +1,29 @@
+# Configuration du kiosque StorePOS (lue par storepos.service)
+# Après modification : sudo systemctl restart storepos
+
+# Binaire de l'application. Vide = détection automatique :
+#   /opt/com.aemsofts.storepos/bin/com.aemsofts.storepos puis /opt/caisse-demo/bin/caisse-demo
+APP_BIN=
+
+# Arguments éventuels passés à l'application
+APP_ARGS=
+
+# Motif (regex, insensible à la casse) du titre de fenêtre, utilisé en secours si la fenêtre
+# n'est pas retrouvée par son PID. Vérifier le titre réel avec : DISPLAY=<écran> wmctrl -l (écran détecté dans le log)
+WINDOW_NAME_PATTERN="storepos|aemsoft|caisse"
+
+# Temps maximum d'attente de la fenêtre (secondes)
+MAX_WAIT_SECONDS=30
+
+# Fichier de log du script de lancement
+LOG_FILE=/var/log/storepos-kiosk.log
+
+# Bouton « i » tactile (appui maintenu) : informations de la caisse et ID TeamViewer
+# Après modification : sudo systemctl restart lightdm  (ou redémarrer la caisse)
+INFO_BUTTON_ENABLED=yes
+# auto : ce bouton (fenêtre grise Tk) s'efface quand l'application (caisse-demo 1.3.3 et plus) dessine son propre bouton rond ;
+# tk : toujours ce bouton, par exemple avec une autre application de caisse
+INFO_BUTTON_MODE=auto
+# bottom-right | bottom-left | top-right | top-left
+INFO_BUTTON_POS=bottom-right
+INFO_HOLD_SECONDS=2

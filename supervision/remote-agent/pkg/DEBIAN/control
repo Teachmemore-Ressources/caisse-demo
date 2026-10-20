@@ -1,0 +1,14 @@
+Package: storepos-kiosk-remote
+Version: 1.0.0
+Section: admin
+Priority: optional
+Architecture: all
+Depends: rustdesk (>= 1.2), systemd, openssl
+Maintainer: Formation Linux <formation@example.com>
+Description: Prise en main à distance d'une caisse kiosque (RustDesk, connexion sortante, aucun port ouvert)
+ Configure le client RustDesk officiel pour qu'il se connecte, EN SORTIE, au serveur RustDesk de l'entreprise (annuaire et relais) :
+ aucun port à ouvrir chez le client, pas de SSH, pas de VPN. L'accès n'est possible qu'avec la clé du serveur et un mot de passe
+ propre à chaque caisse (dérivé de son ID et d'un secret de l'entreprise, jamais stocké en clair).
+ .
+ Nécessite le paquet officiel « rustdesk » (GitHub rustdesk/rustdesk, version 1.2 ou plus).
+ Inscription : storepos-kiosk-remote-enroll ; diagnostic : storepos-kiosk-remote-check.

@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Session Openbox verrouillée pour la caisse :
+     aucun raccourci clavier, aucun menu au clic (clavier et souris sans liaisons),
+     fenêtres principales plein écran sans bordure. -->
+<openbox_config xmlns="http://openbox.org/3.4/rc">
+  <focus>
+    <focusNew>yes</focusNew>
+    <followMouse>no</followMouse>
+  </focus>
+  <placement>
+    <policy>Smart</policy>
+  </placement>
+  <theme>
+    <name>Clearlooks</name>
+    <titleLayout></titleLayout>
+    <keepBorder>no</keepBorder>
+  </theme>
+  <desktops>
+    <number>1</number>
+  </desktops>
+  <keyboard>
+  </keyboard>
+  <mouse>
+  </mouse>
+  <applications>
+    <application class="*" type="normal">
+      <decor>no</decor>
+      <maximized>yes</maximized>
+      <fullscreen>yes</fullscreen>
+    </application>
+  </applications>
+</openbox_config>

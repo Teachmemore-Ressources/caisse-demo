@@ -14,7 +14,6 @@
 set -euo pipefail
 RACINE="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 COMPOSE=${COMPOSE_CMD:-docker compose}
-HASH_CMD="${CADDY_HASH_CMD:-docker run --rm caddy:2.11.7 caddy hash-password --plaintext}"
 cd "$RACINE"
 
 lire_env() { grep -E "^$1=" .env 2>/dev/null | head -1 | cut -d= -f2- | sed -e 's/[[:space:]]*#.*$//' -e 's/[[:space:]]*$//' || true; }
@@ -36,7 +35,13 @@ done
 [ "$pret" = 1 ] || { echo "GLPI n'est pas installé après 5 minutes : voir  $COMPOSE logs glpi glpi-db" >&2; exit 1; }
 echo "  installation détectée"
 
-HASH=$($HASH_CMD "$ADMIN_PW")
+# L'empreinte doit être calculée PAR PHP (password_hash, préfixe $2y$) : GLPI juge « périmée » toute autre empreinte (par exemple le $2a$ de Caddy)
+# et répond « votre mot de passe a expiré » à la connexion. CADDY_HASH_CMD : remplacement réservé aux tests.
+if [ -n "${CADDY_HASH_CMD:-}" ]; then
+    HASH=$($CADDY_HASH_CMD "$ADMIN_PW")
+else
+    HASH=$($COMPOSE exec -T -e GLPI_PW="$ADMIN_PW" glpi php -r 'echo password_hash(getenv("GLPI_PW"), PASSWORD_DEFAULT);' | tr -d '\r\n')
+fi
 case "$HASH" in '$2'*) ;; *) echo "Calcul de l'empreinte impossible." >&2; exit 1 ;; esac
 
 echo "== Sécurisation des comptes et activation de l'inventaire =="

@@ -13,6 +13,10 @@ resource "terraform_data" "verifications" {
       error_message = "activer_glpi = true exige domaine_glpi, différent de domaine_metrics et domaine_logs."
     }
     precondition {
+      condition     = !var.activer_rustdesk || (var.domaine_rustdesk != "" && !contains([var.domaine_metrics, var.domaine_logs, var.domaine_glpi, var.domaine_grafana], var.domaine_rustdesk))
+      error_message = "activer_rustdesk = true exige domaine_rustdesk, différent des autres noms de domaine."
+    }
+    precondition {
       condition     = var.domaine_metrics != var.domaine_logs
       error_message = "domaine_metrics et domaine_logs doivent être deux noms différents."
     }
@@ -52,5 +56,21 @@ resource "aws_ssm_parameter" "glpi" {
   name       = "/${var.name}/${each.key == "db" ? "glpi_db_password" : each.key == "root" ? "glpi_db_root_password" : "glpi_admin_password"}"
   type       = "SecureString"
   value      = each.value.result
+  depends_on = [terraform_data.verifications]
+}
+
+# --- RustDesk (seulement si activer_rustdesk) : secret d'où sont dérivés les mots de passe de prise en main des caisses ---
+
+resource "random_password" "rustdesk_secret" {
+  count   = var.activer_rustdesk ? 1 : 0
+  length  = 40
+  special = false
+}
+
+resource "aws_ssm_parameter" "rustdesk_secret" {
+  count      = var.activer_rustdesk ? 1 : 0
+  name       = "/${var.name}/rustdesk_secret"
+  type       = "SecureString"
+  value      = random_password.rustdesk_secret[0].result
   depends_on = [terraform_data.verifications]
 }

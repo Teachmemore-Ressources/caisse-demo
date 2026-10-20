@@ -3,6 +3,14 @@
 
 locals {
   az = "${var.region}${var.availability_zone_suffix}"
+
+  # RustDesk : clé = "<port>-<port>" (+ "-udp" pour le deuxième 21116) ; valeur = protocole
+  ports_rustdesk = {
+    "21115-21115"     = "tcp"
+    "21116-21116"     = "tcp"
+    "21117-21117"     = "tcp"
+    "21116-21116-udp" = "udp"
+  }
 }
 
 resource "aws_vpc" "this" {
@@ -69,6 +77,18 @@ resource "aws_security_group" "passerelle" {
     cidr_blocks = ["0.0.0.0/0"]
   }
 
+  # RustDesk (seulement si activé) : annuaire des ID (21116 tcp+udp), test NAT (21115) et relais (21117). Les ports du client web (21118/21119) restent fermés.
+  dynamic "ingress" {
+    for_each = { for k, v in local.ports_rustdesk : k => v if var.activer_rustdesk }
+    content {
+      description = "RustDesk ${ingress.value} ${split("-", ingress.key)[0]}"
+      from_port   = tonumber(split("-", ingress.key)[0])
+      to_port     = tonumber(split("-", ingress.key)[1])
+      protocol    = ingress.value
+      cidr_blocks = ["0.0.0.0/0"]
+    }
+  }
+
   egress {
     description = "Sorties libres - Lets Encrypt, Docker, S3, Systems Manager, mises a jour"
     from_port   = 0
@@ -101,6 +121,7 @@ locals {
     var.domaine_logs,
     var.grafana_mode == "sso" ? var.domaine_grafana : "",
     var.activer_glpi ? var.domaine_glpi : "",
+    var.activer_rustdesk ? var.domaine_rustdesk : "",
   ])
 }
 

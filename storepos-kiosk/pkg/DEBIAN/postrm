@@ -1,0 +1,34 @@
+#!/bin/sh
+# postrm script for storepos-kiosk
+set -e
+
+KIOSK_USER="caissepos"
+
+case "$1" in
+    purge)
+        # La base de données de la caisse (storepos.db) est dans le home de l'utilisateur kiosque :
+        # on NE le supprime PAS automatiquement (données de ventes).
+        # Pour tout effacer volontairement : sudo deluser --remove-home caissepos
+        rm -f /var/log/storepos-kiosk.log
+        rm -rf "/home/$KIOSK_USER/.config/openbox"
+        systemctl daemon-reload || true
+        if id "$KIOSK_USER" >/dev/null 2>&1; then
+            echo "Note : l'utilisateur '$KIOSK_USER' et ses données sont conservés."
+            echo "Pour les supprimer : sudo deluser --remove-home $KIOSK_USER"
+        fi
+    ;;
+
+    remove)
+        systemctl daemon-reload || true
+    ;;
+
+    upgrade|failed-upgrade|abort-install|abort-upgrade|disappear)
+    ;;
+
+    *)
+        echo "postrm called with unknown argument \`$1'" >&2
+        exit 1
+    ;;
+esac
+
+exit 0

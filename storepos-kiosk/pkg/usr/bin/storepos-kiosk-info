@@ -1,0 +1,38 @@
+#!/bin/bash
+#
+# storepos-kiosk-info : affiche les informations d'identification de la caisse
+# (nom, IP, versions, état du service, ID TeamViewer).
+# Utilisable en SSH ou appelé par le bouton « i » de l'écran (storepos-kiosk-infobutton).
+# Usage : storepos-kiosk-info
+
+get_tv_id() {
+    local out id
+    if ! command -v teamviewer >/dev/null 2>&1; then
+        echo "non installé"
+        return
+    fi
+    if [ "$(id -u)" -eq 0 ]; then
+        out=$(/usr/bin/teamviewer info 2>/dev/null)
+    else
+        # droit limité à cette seule commande (voir /etc/sudoers.d/storepos-kiosk)
+        out=$(sudo -n /usr/bin/teamviewer info 2>/dev/null)
+    fi
+    id=$(printf '%s\n' "$out" | grep -iE 'TeamViewer ID' | grep -oE '[0-9][0-9 ]{6,}[0-9]' | head -n 1)
+    echo "${id:-indisponible}"
+}
+
+HOST=$(hostname)
+IPS=$(hostname -I 2>/dev/null | xargs)
+APP_VER=$(dpkg-query -W -f='${Version}' com.aemsofts.storepos 2>/dev/null || dpkg-query -W -f='${Version}' caisse-demo 2>/dev/null || true)
+KIOSK_VER=$(dpkg-query -W -f='${Version}' storepos-kiosk 2>/dev/null || true)
+SVC=$(systemctl is-active storepos.service 2>/dev/null || true)
+
+printf 'Caisse            : %s\n' "$HOST"
+printf 'Adresse IP        : %s\n' "${IPS:-aucune}"
+printf 'ID TeamViewer     : %s\n' "$(get_tv_id)"
+# ID RustDesk : écrit à l'inscription par storepos-kiosk-remote-enroll (l'ID n'est pas secret)
+printf 'ID RustDesk       : %s\n' "$(cat /var/lib/storepos-kiosk/remote-id 2>/dev/null || echo 'non installé')"
+printf 'Application       : %s\n' "${APP_VER:-?}"
+printf 'Paquet kiosque    : %s\n' "${KIOSK_VER:-?}"
+printf 'Service storepos  : %s\n' "${SVC:-?}"
+printf 'Date              : %s\n' "$(date '+%Y-%m-%d %H:%M')"

@@ -1,6 +1,6 @@
 # Si AWS détecte une panne matérielle du serveur, il le relance automatiquement (même disque, même IP, mêmes données).
 # Le reste de la supervision (disque, mémoire, alertes des caisses) est assuré par Prometheus/Alertmanager.
-# Surveillance EXTERNE conseillée en plus : une sonde sur https://<domaine_metrics>/healthz (voir GUIDE-SERVEUR.md § 9).
+# Surveillance EXTERNE conseillée en plus : une sonde sur https://<domaine_metrics>/healthz (voir guides/GUIDE-SERVEUR.md § 9).
 
 resource "aws_sns_topic" "alertes" {
   count = var.alert_email == "" ? 0 : 1

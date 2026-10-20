@@ -1,0 +1,48 @@
+#!/bin/bash
+#
+# storepos-kiosk-remote-check : diagnostic de la prise en main à distance (réglages, service, ID, joignabilité du serveur).
+# Usage : sudo storepos-kiosk-remote-check
+set -u
+RUSTDESK="${RUSTDESK_BIN:-rustdesk}"
+CONF="${RUSTDESK_CONF_DIR:-/root/.config/rustdesk}/RustDesk2.toml"
+PORT_ID="${RUSTDESK_PORT_ID:-21116}"; PORT_RELAIS="${RUSTDESK_PORT_RELAIS:-21117}"
+KO=0; WARN=0
+ok()   { echo "  [ OK ] $*"; }
+ko()   { echo "  [ KO ] $*"; KO=1; }
+warn() { echo "  [ !! ] $*"; WARN=1; }
+valeur() { sed -n "s/^[[:space:]]*$1[[:space:]]*=[[:space:]]*'\(.*\)'[[:space:]]*$/\1/p" "$CONF" 2>/dev/null | head -1; }
+joignable() { timeout 6 bash -c "exec 3<>/dev/tcp/$1/$2" 2>/dev/null; }
+
+echo; echo "== Réglages =="
+SERVEUR=""
+if [ -f "$CONF" ]; then
+    SERVEUR=$(valeur custom-rendezvous-server); CLE=$(valeur key)
+    echo "  serveur : ${SERVEUR:-?} | clé : $([ -n "${CLE:-}" ] && echo "${CLE:0:8}…" || echo ABSENTE)"
+    [ -n "$SERVEUR" ] && ok "serveur RustDesk de l'entreprise configuré" || ko "serveur absent du fichier de configuration"
+    printf '%s' "${CLE:-}" | grep -Eq '^[A-Za-z0-9+/]{43}=$' && ok "clé du serveur présente" || ko "clé du serveur absente ou invalide : sans elle, ce poste utiliserait les serveurs PUBLICS de RustDesk"
+    perms=$(stat -c %a "$CONF" 2>/dev/null); [ "$perms" = "600" ] && ok "fichier protégé (0600)" || warn "droits du fichier : $perms (0600 attendu)"
+else
+    ko "caisse non inscrite ($CONF absent) : sudo storepos-kiosk-remote-enroll --help"
+fi
+
+echo; echo "== Client RustDesk =="
+if command -v "$RUSTDESK" >/dev/null 2>&1; then ok "rustdesk installé"; else ko "rustdesk n'est pas installé"; fi
+if [ "${STOREPOS_TEST:-0}" != "1" ]; then
+    systemctl is-active --quiet rustdesk.service && ok "service rustdesk actif" || ko "service rustdesk arrêté (sudo systemctl start rustdesk)"
+fi
+ID=$("$RUSTDESK" --get-id 2>/dev/null | tr -dc '0-9' || true)
+if [ "${#ID}" -ge 6 ]; then ok "ID de la caisse : $ID"; else ko "ID introuvable"; fi
+
+echo; echo "== Liaison avec le serveur =="
+if [ -n "$SERVEUR" ]; then
+    joignable "$SERVEUR" "$PORT_ID" && ok "annuaire joignable ($SERVEUR:$PORT_ID)" || ko "annuaire injoignable ($SERVEUR:$PORT_ID) : DNS, réseau ou serveur arrêté"
+    joignable "$SERVEUR" "$PORT_RELAIS" && ok "relais joignable ($SERVEUR:$PORT_RELAIS)" || ko "relais injoignable ($SERVEUR:$PORT_RELAIS)"
+    warn "UDP 21116 (connexion directe) non testable d'ici : sans lui, la connexion passe par le relais, un peu moins fluide"
+else
+    warn "liaison non testée (caisse non inscrite)"
+fi
+
+echo
+if [ "$KO" -ne 0 ]; then echo "Résultat : au moins un point KO."; exit 1
+elif [ "$WARN" -ne 0 ]; then echo "Résultat : correct, avec des remarques."
+else echo "Résultat : tout est OK."; fi

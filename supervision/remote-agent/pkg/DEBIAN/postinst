@@ -1,0 +1,28 @@
+#!/bin/sh
+# postinst de storepos-kiosk-remote
+set -e
+
+case "$1" in
+    configure)
+        install -d -m 0755 /var/lib/storepos-kiosk
+        # Ne rien démarrer tant que la caisse n'est pas inscrite : sans serveur configuré, RustDesk utiliserait les serveurs PUBLICS de RustDesk.
+        if [ ! -f /root/.config/rustdesk/RustDesk2.toml ] && [ -d /run/systemd/system ]; then
+            systemctl stop rustdesk.service >/dev/null 2>&1 || true
+            systemctl disable rustdesk.service >/dev/null 2>&1 || true
+        fi
+        echo
+        echo "=== Prise en main à distance installée (pas encore active) ==="
+        echo "1. Inscrire la caisse :  sudo storepos-kiosk-remote-enroll --help"
+        echo "2. Vérifier :            sudo storepos-kiosk-remote-check"
+    ;;
+
+    abort-upgrade|abort-remove|abort-deconfigure)
+    ;;
+
+    *)
+        echo "postinst called with unknown argument \`$1'" >&2
+        exit 1
+    ;;
+esac
+
+exit 0

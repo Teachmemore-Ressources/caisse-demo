@@ -5,6 +5,10 @@
 set -u
 SUP="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 export PATH="${SUPERVISION_TOOLS:-$HOME/supervision-test/bin}:$PATH"
+# cache des fournisseurs : le téléchargement du fournisseur AWS (~100 Mo) n'est fait qu'une fois
+export TF_PLUGIN_CACHE_DIR="${TF_PLUGIN_CACHE_DIR:-$HOME/.terraform.d/plugin-cache}"; mkdir -p "$TF_PLUGIN_CACHE_DIR"
+printf 'plugin_cache_may_break_dependency_lock_file = true\nplugin_cache_dir = "%s"\n' "$TF_PLUGIN_CACHE_DIR" > "${TMPDIR:-/tmp}/terraformrc-validation.$$"
+export TF_CLI_CONFIG_FILE="${TMPDIR:-/tmp}/terraformrc-validation.$$"
 T=$(mktemp -d); trap 'rm -rf "$T"' EXIT
 FAIL=0; ok() { echo "  OK    $*"; }; ko() { echo "  ECHEC $*"; FAIL=1; }
 cp -r "$SUP/terraform" "$SUP/serveur" "$T/"; cd "$T/terraform"

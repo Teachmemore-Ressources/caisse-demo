@@ -1,0 +1,33 @@
+# Surcharge : ajoute le serveur de PRISE EN MAIN À DISTANCE RustDesk (hbbs = annuaire des ID, hbbr = relais) à la passerelle.
+#
+#   docker compose -f docker-compose.yml -f docker-compose.prive.yml -f docker-compose.rustdesk.yml up -d
+#
+# Les caisses ne reçoivent rien : chaque caisse se connecte EN SORTIE à ce serveur, qui fait le lien avec le poste de l'administrateur.
+# Ports à ouvrir sur le SERVEUR (jamais chez le client) : 21115/tcp, 21116/tcp, 21116/udp, 21117/tcp (le groupe de sécurité Terraform le fait).
+# 21118 et 21119 (client web) ne sont PAS ouverts.
+#
+# « -k _ » : seuls les clients qui présentent la clé du serveur peuvent s'enregistrer et utiliser le relais.
+# La paire de clés est créée au premier démarrage dans le volume rustdesk_data (id_ed25519 = clé privée, id_ed25519.pub = clé à donner aux
+# caisses). PERDRE ce volume change la clé : il faudrait réinscrire TOUTES les caisses -> il est inclus dans scripts/sauvegarder.sh.
+#
+# Variable à définir dans .env : RUSTDESK_DOMAIN (nom DNS du serveur, ex. rustdesk.exemple.fr).
+services:
+  hbbs:
+    image: rustdesk/rustdesk-server:1.1.16
+    command: ["hbbs", "-r", "${RUSTDESK_DOMAIN:?définir RUSTDESK_DOMAIN dans .env}:21117", "-k", "_"]
+    network_mode: host          # recommandé par RustDesk sous Linux : le serveur doit voir les vraies adresses des clients
+    volumes:
+      - rustdesk_data:/root
+    depends_on: [hbbr]
+    restart: unless-stopped
+
+  hbbr:
+    image: rustdesk/rustdesk-server:1.1.16
+    command: ["hbbr", "-k", "_"]
+    network_mode: host
+    volumes:
+      - rustdesk_data:/root
+    restart: unless-stopped
+
+volumes:
+  rustdesk_data:

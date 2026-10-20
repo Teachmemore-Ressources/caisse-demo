@@ -1,6 +1,7 @@
 # Tests unitaires des alertes : « promtool test rules supervision/tests/caisses.rules.test.yml »
 rule_files:
   - ../serveur/prometheus/rules/caisses.yml
+  - ../serveur/prometheus/rules/enregistrements.yml
 
 evaluation_interval: 1m
 
@@ -32,6 +33,36 @@ tests:
             exp_annotations:
               summary: "Caisse muette : LYON-01 poste 1"
               description: "Plus aucune mesure de demo / LYON-01 poste 1 (machine m1) depuis plus de 20 minutes en heures d'ouverture. Vérifier la box, le réseau et l'alimentation du magasin."
+
+  # --- magasin fermé le dimanche : une caisse tombée en panne le samedi soir doit être signalée le lundi matin --------
+  # Vue pour la dernière fois à 18 h 30 UTC (jour 0), plus rien ensuite. Lundi 8 h UTC (jour 2) : 37 h 30 sans mesure, hors de l'ancienne fenêtre de 24 h.
+  - interval: 1m
+    input_series:
+      - series: 'up{job="caisse",enseigne="demo",magasin="LYON-01",poste="1",machine="m1"}'
+        values: '_x1080 1x30 _x2250'
+    alert_rule_test:
+      - eval_time: 3360m
+        alertname: CaisseMuette
+        exp_alerts:
+          - exp_labels:
+              severity: critical
+              enseigne: demo
+              magasin: LYON-01
+              poste: "1"
+              machine: m1
+            exp_annotations:
+              summary: "Caisse muette : LYON-01 poste 1"
+              description: "Plus aucune mesure de demo / LYON-01 poste 1 (machine m1) depuis plus de 20 minutes en heures d'ouverture. Vérifier la box, le réseau et l'alimentation du magasin."
+
+  # --- une caisse retirée du parc cesse d'alerter après 7 jours (sinon l'inventaire grossirait sans fin) ---------------
+  - interval: 1m
+    input_series:
+      - series: 'up{job="caisse",enseigne="demo",magasin="LYON-01",poste="1",machine="m1"}'
+        values: '_x1080 1x30 _x10900'
+    alert_rule_test:
+      - eval_time: 12000m              # 8 jours et 8 h après : la caisse n'est plus « connue »
+        alertname: CaisseMuette
+        exp_alerts: []
 
   # --- la nuit, une caisse éteinte n'est PAS une panne ------------------------------------------------------
   - interval: 1m
@@ -211,3 +242,161 @@ tests:
             exp_annotations:
               summary: "L'application redémarre en boucle : LYON-01 poste 1"
               description: "Au moins 4 redémarrages de storepos.service dans la dernière heure."
+
+  # --- panne d'une enseigne : 4 caisses sur 10 de « alpha » muettes (40 %), « bravo » est saine --------------------------
+  - interval: 1m
+    input_series:
+      - series: 'up{job="caisse",enseigne="alpha",magasin="M-alpha",poste="1",machine="alpha1"}'
+        values: '_x480 1x30 _x300'
+      - series: 'up{job="caisse",enseigne="alpha",magasin="M-alpha",poste="2",machine="alpha2"}'
+        values: '_x480 1x30 _x300'
+      - series: 'up{job="caisse",enseigne="alpha",magasin="M-alpha",poste="3",machine="alpha3"}'
+        values: '_x480 1x30 _x300'
+      - series: 'up{job="caisse",enseigne="alpha",magasin="M-alpha",poste="4",machine="alpha4"}'
+        values: '_x480 1x30 _x300'
+      - series: 'up{job="caisse",enseigne="alpha",magasin="M-alpha",poste="5",machine="alpha5"}'
+        values: '_x480 1x300'
+      - series: 'up{job="caisse",enseigne="alpha",magasin="M-alpha",poste="6",machine="alpha6"}'
+        values: '_x480 1x300'
+      - series: 'up{job="caisse",enseigne="alpha",magasin="M-alpha",poste="7",machine="alpha7"}'
+        values: '_x480 1x300'
+      - series: 'up{job="caisse",enseigne="alpha",magasin="M-alpha",poste="8",machine="alpha8"}'
+        values: '_x480 1x300'
+      - series: 'up{job="caisse",enseigne="alpha",magasin="M-alpha",poste="9",machine="alpha9"}'
+        values: '_x480 1x300'
+      - series: 'up{job="caisse",enseigne="alpha",magasin="M-alpha",poste="10",machine="alpha10"}'
+        values: '_x480 1x300'
+      - series: 'up{job="caisse",enseigne="bravo",magasin="M-bravo",poste="1",machine="bravo1"}'
+        values: '_x480 1x300'
+      - series: 'up{job="caisse",enseigne="bravo",magasin="M-bravo",poste="2",machine="bravo2"}'
+        values: '_x480 1x300'
+      - series: 'up{job="caisse",enseigne="bravo",magasin="M-bravo",poste="3",machine="bravo3"}'
+        values: '_x480 1x300'
+      - series: 'up{job="caisse",enseigne="bravo",magasin="M-bravo",poste="4",machine="bravo4"}'
+        values: '_x480 1x300'
+      - series: 'up{job="caisse",enseigne="bravo",magasin="M-bravo",poste="5",machine="bravo5"}'
+        values: '_x480 1x300'
+      - series: 'up{job="caisse",enseigne="bravo",magasin="M-bravo",poste="6",machine="bravo6"}'
+        values: '_x480 1x300'
+      - series: 'up{job="caisse",enseigne="bravo",magasin="M-bravo",poste="7",machine="bravo7"}'
+        values: '_x480 1x300'
+      - series: 'up{job="caisse",enseigne="bravo",magasin="M-bravo",poste="8",machine="bravo8"}'
+        values: '_x480 1x300'
+      - series: 'up{job="caisse",enseigne="bravo",magasin="M-bravo",poste="9",machine="bravo9"}'
+        values: '_x480 1x300'
+      - series: 'up{job="caisse",enseigne="bravo",magasin="M-bravo",poste="10",machine="bravo10"}'
+        values: '_x480 1x300'
+    alert_rule_test:
+      - eval_time: 520m
+        alertname: PanneEnseigne
+        exp_alerts: []             # trop tôt : la condition dure moins de 10 min
+      - eval_time: 560m
+        alertname: PanneEnseigne
+        exp_alerts:
+          - exp_labels:
+              severity: critical
+              enseigne: alpha
+            exp_annotations:
+              summary: "Plus de 30 % des caisses de alpha ne répondent plus"
+              description: "Plusieurs caisses de alpha sont muettes en même temps en heures d'ouverture : vérifier côté client (accès Internet, box), ou l'identifiant de l'enseigne s'il a été changé ou révoqué."
+
+  # --- une seule caisse muette sur 10 dans une enseigne : pas de panne d'enseigne ------------------------------------------
+  - interval: 1m
+    input_series:
+      - series: 'up{job="caisse",enseigne="charlie",magasin="M-charlie",poste="1",machine="charlie1"}'
+        values: '_x480 1x30 _x300'
+      - series: 'up{job="caisse",enseigne="charlie",magasin="M-charlie",poste="2",machine="charlie2"}'
+        values: '_x480 1x300'
+      - series: 'up{job="caisse",enseigne="charlie",magasin="M-charlie",poste="3",machine="charlie3"}'
+        values: '_x480 1x300'
+      - series: 'up{job="caisse",enseigne="charlie",magasin="M-charlie",poste="4",machine="charlie4"}'
+        values: '_x480 1x300'
+      - series: 'up{job="caisse",enseigne="charlie",magasin="M-charlie",poste="5",machine="charlie5"}'
+        values: '_x480 1x300'
+      - series: 'up{job="caisse",enseigne="charlie",magasin="M-charlie",poste="6",machine="charlie6"}'
+        values: '_x480 1x300'
+      - series: 'up{job="caisse",enseigne="charlie",magasin="M-charlie",poste="7",machine="charlie7"}'
+        values: '_x480 1x300'
+      - series: 'up{job="caisse",enseigne="charlie",magasin="M-charlie",poste="8",machine="charlie8"}'
+        values: '_x480 1x300'
+      - series: 'up{job="caisse",enseigne="charlie",magasin="M-charlie",poste="9",machine="charlie9"}'
+        values: '_x480 1x300'
+      - series: 'up{job="caisse",enseigne="charlie",magasin="M-charlie",poste="10",machine="charlie10"}'
+        values: '_x480 1x300'
+    alert_rule_test:
+      - eval_time: 560m
+        alertname: PanneEnseigne
+        exp_alerts: []
+
+  # --- processeur saturé 15 minutes ----------------------------------------------------------------------------------------
+  - interval: 1m
+    input_series:
+      - series: 'caisse:cpu_percent{enseigne="demo",magasin="LYON-01",poste="1",machine="m1"}'
+        values: '99x40'
+    alert_rule_test:
+      - eval_time: 10m
+        alertname: ProcesseurSature
+        exp_alerts: []
+      - eval_time: 25m
+        alertname: ProcesseurSature
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+              enseigne: demo
+              magasin: LYON-01
+              poste: "1"
+              machine: m1
+            exp_annotations:
+              summary: "Processeur saturé : LYON-01 poste 1"
+              description: "Plus de 95 % du processeur utilisé depuis 15 minutes (99 %)."
+
+  # --- disque lent (attente disque élevée) -----------------------------------------------------------------------------------
+  - interval: 1m
+    input_series:
+      - series: 'caisse:iowait_percent{enseigne="demo",magasin="LYON-01",poste="2",machine="m2"}'
+        values: '60x40'
+    alert_rule_test:
+      - eval_time: 25m
+        alertname: DisqueLent
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+              enseigne: demo
+              magasin: LYON-01
+              poste: "2"
+              machine: m2
+            exp_annotations:
+              summary: "Disque lent : LYON-01 poste 2"
+              description: "Le processeur attend le disque 60 % du temps depuis 15 minutes : disque défaillant ou saturé."
+
+  # --- règles d'enregistrement : la santé de chaque caisse est calculée une fois par minute -----------------------------------
+  - interval: 1m
+    input_series:
+      - series: 'node_cpu_seconds_total{job="caisse",enseigne="demo",magasin="LYON-01",poste="1",machine="m1",cpu="0",mode="idle"}'
+        values: '0+30x30'          # 30 s d'inactivité par minute et par cœur = 50 % de processeur utilisé
+      - series: 'node_cpu_seconds_total{job="caisse",enseigne="demo",magasin="LYON-01",poste="1",machine="m1",cpu="1",mode="idle"}'
+        values: '0+30x30'
+      - series: 'node_memory_MemTotal_bytes{job="caisse",enseigne="demo",magasin="LYON-01",poste="1",machine="m1"}'
+        values: '1000x30'
+      - series: 'node_memory_MemAvailable_bytes{job="caisse",enseigne="demo",magasin="LYON-01",poste="1",machine="m1"}'
+        values: '250x30'           # 75 % utilisés
+      - series: 'node_filesystem_size_bytes{job="caisse",enseigne="demo",magasin="LYON-01",poste="1",machine="m1",mountpoint="/"}'
+        values: '100x30'
+      - series: 'node_filesystem_avail_bytes{job="caisse",enseigne="demo",magasin="LYON-01",poste="1",machine="m1",mountpoint="/"}'
+        values: '10x30'            # 90 % utilisés
+    promql_expr_test:
+      - expr: caisse:cpu_percent
+        eval_time: 20m
+        exp_samples:
+          - labels: 'caisse:cpu_percent{enseigne="demo",magasin="LYON-01",poste="1",machine="m1"}'
+            value: 50
+      - expr: caisse:memoire_percent
+        eval_time: 20m
+        exp_samples:
+          - labels: 'caisse:memoire_percent{enseigne="demo",magasin="LYON-01",poste="1",machine="m1"}'
+            value: 75
+      - expr: caisse:disque_percent
+        eval_time: 20m
+        exp_samples:
+          - labels: 'caisse:disque_percent{enseigne="demo",magasin="LYON-01",poste="1",machine="m1"}'
+            value: 90

@@ -1,5 +1,5 @@
 Package: storepos-kiosk-monitoring
-Version: 1.1.0
+Version: 1.2.1
 Section: admin
 Priority: optional
 Architecture: all
@@ -7,10 +7,12 @@ Depends: storepos-kiosk (>= 1.3.0), systemd, adduser, curl, usbutils
 Recommends: alloy
 Maintainer: Formation Linux <formation@example.com>
 Description: Supervision d'une caisse kiosque avec Grafana (envoi sortant, aucun port ouvert)
- Installe l'agent de supervision de la caisse : mesures système (processeur, mémoire,
- disque, services), mesures métier publiées par l'application (tickets en attente,
- version, ventes du jour, état de la synchronisation) et journaux, envoyés EN SORTIE
+ Installe l'agent de supervision de la caisse : mesures de SANTÉ de la machine (processeur,
+ mémoire, disque, services) et de l'application (version, vivante ou figée, tickets en
+ attente d'envoi, état de la synchronisation) et journaux, envoyés EN SORTIE
  vers Prometheus / Mimir et Loki (ou Grafana Cloud). Rien n'est exposé sur le réseau.
+ .
+ Aucune donnée commerciale (ventes, catalogue, clients) n'est envoyée : liste blanche.
  .
  Nécessite Grafana Alloy (paquet « alloy » du dépôt Grafana). Inscription d'une caisse :
  storepos-kiosk-monitoring-enroll ; diagnostic : storepos-kiosk-monitoring-check.

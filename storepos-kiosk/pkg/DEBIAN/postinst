@@ -1,0 +1,86 @@
+#!/bin/sh
+# postinst script for storepos-kiosk
+set -e
+
+KIOSK_USER="caissepos"
+KIOSK_HOME="/home/$KIOSK_USER"
+TEMPLATES="/usr/share/storepos-kiosk"
+# Groupes nécessaires aux périphériques (scanner/imprimante USB, balance série, vidéo, audio)
+KIOSK_GROUPS="plugdev dialout video audio"
+
+case "$1" in
+    configure)
+        # 1. Groupes (créés s'ils n'existent pas)
+        for g in $KIOSK_GROUPS; do
+            getent group "$g" >/dev/null 2>&1 || addgroup --system "$g" >/dev/null
+        done
+
+        # 2. Utilisateur dédié, sans mot de passe
+        if ! id "$KIOSK_USER" >/dev/null 2>&1; then
+            adduser --disabled-password --gecos "Caisse StorePOS" "$KIOSK_USER"
+            echo "Utilisateur '$KIOSK_USER' créé (sans mot de passe)."
+        fi
+        for g in $KIOSK_GROUPS; do
+            adduser "$KIOSK_USER" "$g" >/dev/null 2>&1 || true
+        done
+
+        # 3. Fichier de log accessible à l'utilisateur kiosque
+        touch /var/log/storepos-kiosk.log
+        chown "$KIOSK_USER":"$KIOSK_USER" /var/log/storepos-kiosk.log
+        chmod 640 /var/log/storepos-kiosk.log
+
+        # 4. Configuration Openbox de l'utilisateur kiosque (le home n'existe qu'après l'étape 2,
+        #    donc elle ne peut pas être livrée comme simple fichier du paquet)
+        install -d -o "$KIOSK_USER" -g "$KIOSK_USER" -m 755 "$KIOSK_HOME/.config" "$KIOSK_HOME/.config/openbox"
+        install -m 755 -o "$KIOSK_USER" -g "$KIOSK_USER" "$TEMPLATES/openbox-autostart" "$KIOSK_HOME/.config/openbox/autostart"
+        install -m 644 -o "$KIOSK_USER" -g "$KIOSK_USER" "$TEMPLATES/openbox-rc.xml" "$KIOSK_HOME/.config/openbox/rc.xml"
+
+        # 5. Démarrage graphique : la cible par défaut d'Ubuntu Server est multi-user.target,
+        #    sans elle le service (WantedBy=graphical.target) ne démarrerait jamais.
+        if [ -x /usr/sbin/lightdm ]; then
+            echo /usr/sbin/lightdm > /etc/X11/default-display-manager
+        fi
+        systemctl set-default graphical.target >/dev/null 2>&1 || true
+        systemctl enable lightdm.service >/dev/null 2>&1 || true
+
+        # 6. SSH : le compte kiosque est refusé (fichier sshd_config.d livré par le paquet)
+        if command -v sshd >/dev/null 2>&1 && sshd -t >/dev/null 2>&1; then
+            systemctl reload ssh >/dev/null 2>&1 || systemctl reload sshd >/dev/null 2>&1 || true
+        fi
+
+        # 7. Droit sudo limité (lecture de l'ID TeamViewer pour le bouton « i »)
+        if [ -f /etc/sudoers.d/storepos-kiosk ]; then
+            chmod 0440 /etc/sudoers.d/storepos-kiosk
+            if ! visudo -cf /etc/sudoers.d/storepos-kiosk >/dev/null 2>&1; then
+                echo "sudoers invalide : règle storepos-kiosk retirée" >&2
+                rm -f /etc/sudoers.d/storepos-kiosk
+            fi
+        fi
+
+        # 8. Service de l'application
+        systemctl daemon-reload || true
+        systemctl enable storepos.service || true
+
+        # Mise à jour d'une version déjà installée : le prerm a arrêté le service, on le relance.
+        if [ -n "${2:-}" ]; then
+            systemctl start --no-block storepos.service >/dev/null 2>&1 || true
+        fi
+
+        echo
+        echo "=== Mode kiosque StorePOS installé ==="
+        echo "1. Installez les pilotes scanner/imprimante si besoin (scripts install-*-linux.sh de l'application,"
+        echo "   à lancer avec --user $KIOSK_USER)."
+        echo "2. Vérifiez la caisse :  sudo storepos-kiosk-check"
+        echo "3. Redémarrez (sudo reboot) pour activer le kiosque."
+    ;;
+
+    abort-upgrade|abort-remove|abort-deconfigure)
+    ;;
+
+    *)
+        echo "postinst called with unknown argument \`$1'" >&2
+        exit 1
+    ;;
+esac
+
+exit 0
