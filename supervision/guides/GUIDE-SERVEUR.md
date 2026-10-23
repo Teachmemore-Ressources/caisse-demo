@@ -24,7 +24,7 @@ Faites donc la première installation **sur un serveur de test jetable** et gard
 
 ---
 
-## 1. Choisir et commander le serveu
+## 1. Choisir et commander le serveur
 
 Un petit serveur virtuel (VPS) Linux suffit pour des milliers de caisses :
 
