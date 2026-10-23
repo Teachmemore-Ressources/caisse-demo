@@ -79,7 +79,7 @@ Le script :
 
 Docker contourne `ufw` pour les ports qu'il publie : c'est sans conséquence ici, car `docker-compose.yml` ne publie que 80 et 443 (vérifié par un test).
 
-## 5. Installer Docke
+## 5. Installer Docker
 
 Suivez la documentation officielle pour votre distribution : <https://docs.docker.com/engine/install/ubuntu/> (dépôt apt de Docker, paquet `docker-ce` + `docker-compose-plugin`). Puis :
 
