@@ -6,7 +6,7 @@ Ce guide installe, sur **un serveur loué**, tout ce qui reçoit les mesures et 
 caisses (box ADSL, sortie HTTPS seule) ──HTTPS 443──►  Caddy ──► Prometheus (mesures)
                                                          │  └──► Loki       (journaux)
                                                          │
-administrateurs ──(SSO ou tunnel SSH/VPN)──► Grafana ◄── Prometheus, Loki, Alertmanage
+administrateurs ──(SSO ou tunnel SSH/VPN)──► Grafana ◄── Prometheus, Loki, Alertmanager
 ```
 
 Rien ne contacte jamais une caisse : ce sont elles qui envoient. Aucun port à ouvrir chez le client, aucun VPN, aucune règle de pare-feu côté client.
